@@ -1100,7 +1100,7 @@ static void tcc_assemble_inline(TCCState *s1, const char *str, int len, int glob
 {
     const int *saved_macro_ptr = macro_ptr;
     int dotid = set_idnum('.', IS_ID);
-#ifndef TCC_TARGET_RISCV64
+#if !defined(TCC_TARGET_RISCV64) && !defined(TCC_TARGET_X86_64)
     int dolid = set_idnum('$', 0);
 #endif
 
@@ -1110,7 +1110,7 @@ static void tcc_assemble_inline(TCCState *s1, const char *str, int len, int glob
     tcc_assemble_internal(s1, 0, global);
     tcc_close();
 
-#ifndef TCC_TARGET_RISCV64
+#if !defined(TCC_TARGET_RISCV64) && !defined(TCC_TARGET_X86_64)
     set_idnum('$', dolid);
 #endif
     set_idnum('.', dotid);
