@@ -510,7 +510,7 @@ static void pop_section(TCCState *s1)
 
 static void asm_parse_directive(TCCState *s1, int global)
 {
-    int n, offset, v, size, tok1;
+    int n, offset, v, size, tok1, c;
     Section *sec;
     uint8_t *ptr;
 
@@ -540,18 +540,25 @@ static void asm_parse_directive(TCCState *s1, int global)
             /* the section must have a compatible alignment */
             if (sec->sh_addralign < n)
                 sec->sh_addralign = n;
+            c = sec->sh_flags & SHF_EXECINSTR;
         } else {
 	    if (n < 0)
 	        n = 0;
-            size = n;
+            size = n, c = 0;
         }
         v = 0;
         if (tok == ',') {
             next();
-            v = asm_int_expr(s1);
+            v = asm_int_expr(s1), c = 0;
         }
     zero_pad:
+	if ((uint64_t)ind + size >= 1<<30)
+	    tcc_error("too much data");
         if (sec->sh_type != SHT_NOBITS) {
+            if (c) {
+                gen_fill_nops(size);
+                break;
+            }
             sec->data_offset = ind;
             ptr = section_ptr_add(sec, size);
             memset(ptr, v, size);
@@ -706,11 +713,9 @@ static void asm_parse_directive(TCCState *s1, int global)
 		  expect("constant or same-section symbol");
 		n += esym->st_value;
 	    }
-	    if (n < 0 || n > 0x100000)
-		tcc_error(".org out of range");
             if (n < ind)
                 tcc_error("attempt to .org backwards");
-            v = 0;
+            v = c = 0;
             size = n - ind;
             goto zero_pad;
         }

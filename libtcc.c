@@ -252,7 +252,7 @@ static void *default_reallocator(void *ptr, unsigned long size)
     else {
         ptr1 = realloc(ptr, size);
         if (!ptr1) {
-            fprintf(stderr, "memory full\n");
+            fprintf(stderr, "tcc: memory full\n");
             exit (1);
         }
     }
@@ -1003,9 +1003,9 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     /* paths for crt objects */
     tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
     if (output_type != TCC_OUTPUT_MEMORY && !s->nostdlib)
-        tccelf_add_crtbegin(s);
+        tccelf_add_crtbegin(s); /* may produce errors */
 #endif
-    return 0;
+    return s->nb_errors ? -1 : 0;
 }
 
 LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)

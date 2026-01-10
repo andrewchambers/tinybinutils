@@ -2283,8 +2283,9 @@ void gen_cvt_ftoi(int t)
 void gen_cvt_ftof(int t)
 {
 #ifdef TCC_ARM_VFP
+  uint32_t r = gv(RC_FLOAT);
   if(((vtop->type.t & VT_BTYPE) == VT_FLOAT) != ((t & VT_BTYPE) == VT_FLOAT)) {
-    uint32_t r = vfpr(gv(RC_FLOAT));
+    r = vfpr(r);
     o(0xEEB70AC0|(r<<12)|r|T2CPR(vtop->type.t));
   }
 #else

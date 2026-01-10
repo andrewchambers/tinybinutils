@@ -70,8 +70,9 @@ ST_DATA int nocode_wanted; /* no code generation wanted */
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic (used by return instruction) */
-ST_DATA int func_vc;
-ST_DATA int func_ind;
+ST_DATA int func_vc; /* stack address for implicit struct return storage */
+ST_DATA int func_ind; /* function start address */
+static int func_old;
 ST_DATA const char *funcname;
 ST_DATA CType int_type, func_old_type, char_type, char_pointer_type;
 static CString initstr;
@@ -1385,7 +1386,7 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
         /* make sure that type->ref is on global stack */
         move_ref_to_global(s);
         /* put into local scope */
-        s = sym_copy(s, &local_stack);
+        sym_copy(s, &local_stack);
     }
     return s;
 }
@@ -1906,6 +1907,8 @@ ST_FUNC int gv(int rc)
 #endif
 
         bt = vtop->type.t & VT_BTYPE;
+        if (bt == VT_VOID || bt == VT_STRUCT) /* should not happen */
+            return vtop->r;
 
 #ifdef TCC_TARGET_RISCV64
         /* XXX mega hack */
@@ -2929,7 +2932,8 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
     type.ref = NULL;
 
     if (bt1 == VT_VOID || bt2 == VT_VOID) {
-        ret = op == '?' ? 1 : 0;
+        if (op != '?')
+            tcc_error("operation on void value");
         /* NOTE: as an extension, we accept void on only one side */
         type.t = VT_VOID;
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
@@ -3176,7 +3180,7 @@ op_err:
     }
     // Make sure that we have converted to an rvalue:
     if (vtop->r & VT_LVAL)
-        gv(is_float(vtop->type.t & VT_BTYPE) ? RC_FLOAT : RC_INT);
+        gv(RC_TYPE(vtop->type.t));
 }
 
 #if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_ARM
@@ -3281,8 +3285,10 @@ again:
         df = is_float(dbt);
         dbt_bt = dbt & VT_BTYPE;
         sbt_bt = sbt & VT_BTYPE;
-        if (dbt_bt == VT_VOID)
+        if (dbt_bt == VT_VOID) {
+            vtop->r = vtop->r2 = VT_CONST;
             goto done;
+        }
         if (sbt_bt == VT_VOID) {
 error:
             cast_error(&vtop->type, type);
@@ -3361,8 +3367,11 @@ error:
         }
 
         /* cannot generate code for global or static initializers */
-        if (nocode_wanted & DATA_ONLY_WANTED)
+        if (nocode_wanted & DATA_ONLY_WANTED) {
+            if (df)
+                vtop->r = get_reg(RC_FLOAT); /* don't confuse backends */
             goto done;
+        }
 
         /* non constant case: generate code */
         if (dbt == VT_BOOL) {
@@ -4753,6 +4762,8 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
             } else {
                 if (bt != -1 || (st != -1 && u != VT_INT))
                     goto tmbt;
+                if ((t & VT_DEFSIGN) && (u == VT_VOID || u > VT_LLONG))
+                    goto tmbt;
                 bt = u;
             }
             if (u != VT_INT)
@@ -6112,6 +6123,7 @@ special_math_val:
                 tcc_error("'%s' undeclared", name);
             /* for simple function calls, we tolerate undeclared
                external reference to int() function */
+            if (!func_old)
             tcc_warning_c(warn_implicit_function_declaration)(
                 "implicit declaration of function '%s'", name);
             s = external_global_sym(t, &func_old_type);
@@ -6660,7 +6672,7 @@ static void expr_cond(void)
 
         /* keep structs lvalue by transforming `(expr ? a : b)` to `*(expr ? &a : &b)` so
            that `(expr ? a : b).mem` does not error  with "lvalue expected" */
-        islv = (vtop->r & VT_LVAL) && (sv.r & VT_LVAL) && VT_STRUCT == (type.t & VT_BTYPE);
+        islv = VT_STRUCT == (type.t & VT_BTYPE);
 
         /* now we convert second operand */
         if (c != 1) {
@@ -6668,8 +6680,7 @@ static void expr_cond(void)
             if (islv) {
                 mk_pointer(&vtop->type);
                 gaddrof();
-            } else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
-              gaddrof();
+            }
         }
 
         rc = RC_TYPE(type.t);
@@ -6680,7 +6691,8 @@ static void expr_cond(void)
 
         tt = r2 = 0;
         if (c < 0) {
-            r2 = gv(rc);
+            if (type.t != VT_VOID)
+                r2 = gv(rc);
             tt = gjmp(0);
         }
         gsym(u);
@@ -6695,14 +6707,15 @@ static void expr_cond(void)
             if (islv) {
                 mk_pointer(&vtop->type);
                 gaddrof();
-            } else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
-              gaddrof();
+            }
         }
 
         if (c < 0) {
-            r1 = gv(rc);
-            move_reg(r2, r1, islv ? VT_PTR : type.t);
-            vtop->r = r2;
+            if (type.t != VT_VOID) {
+                r1 = gv(rc);
+                move_reg(r2, r1, islv ? VT_PTR : type.t);
+                vtop->r = r2;
+            }
             gsym(tt);
         }
 
@@ -6745,7 +6758,8 @@ ST_FUNC void gexpr(void)
 
         /* make builtin_constant_p((1,2)) return 0 (like on gcc) */
         if ((vtop->r & VT_VALMASK) == VT_CONST && nocode_wanted && !CONST_WANTED)
-            gv(RC_TYPE(vtop->type.t));
+            if (vtop->type.t != VT_VOID && (vtop->type.t & VT_BTYPE) != VT_STRUCT)
+                gv(RC_TYPE(vtop->type.t));
     }
 }
 
@@ -6855,11 +6869,10 @@ static void check_func_return(void)
 {
     if ((func_vt.t & VT_BTYPE) == VT_VOID)
         return;
-    if (!strcmp (funcname, "main")
+    if ((!strcmp(funcname, "main") || func_old)
         && (func_vt.t & VT_BTYPE) == VT_INT) {
         /* main returns 0 by default */
         vpushi(0);
-        gen_assign_cast(&func_vt);
         gfunc_return(&func_vt);
     } else {
         tcc_warning("function might return no value: '%s'", funcname);
@@ -7242,6 +7255,8 @@ again:
                     tcc_warning("void function returns a value");
                 vtop--;
             }
+        } else if (b && func_old && (func_vt.t & VT_BTYPE) == VT_INT) {
+            vpushi(0);
         } else if (b) {
             tcc_warning("'return' with no value");
             b = 0;
@@ -7806,21 +7821,12 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
         ptr = sec->data + c;
         val = vtop->c.i;
 
-        /* XXX: make code faster ? */
-	if ((vtop->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST) &&
-	    vtop->sym->v >= SYM_FIRST_ANOM &&
-	    /* XXX This rejects compound literals like
-	       '(void *){ptr}'.  The problem is that '&sym' is
-	       represented the same way, which would be ruled out
-	       by the SYM_FIRST_ANOM check above, but also '"string"'
-	       in 'char *p = "string"' is represented the same
-	       with the type being VT_PTR and the symbol being an
-	       anonymous one.  That is, there's no difference in vtop
-	       between '(void *){x}' and '&(void *){x}'.  Ignore
-	       pointer typed entities here.  Hopefully no real code
-	       will ever use compound literals with scalar type.  */
-	    (vtop->type.t & VT_BTYPE) != VT_PTR) {
-	    /* These come from compound literals, memcpy stuff over.  */
+	if ((vtop->r & (VT_SYM|VT_CONST)) == (VT_SYM|VT_CONST)
+            && vtop->sym->v >= SYM_FIRST_ANOM
+            && ((vtop->r & VT_LVAL) /* compound literal */
+                || bt == VT_STRUCT /* designator */
+                )) {
+	    /* memcpy stuff over.  */
 	    Section *ssec;
 	    ElfSym *esym;
 	    ElfW_Rel *rel;
@@ -8072,6 +8078,8 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
                     }
                 }
             }
+            if (tok == ',' && !no_oblock) /* static const char s[] = { "123", }; */
+                next();
         } else {
 
           do_init_array:
@@ -8528,6 +8536,7 @@ static void gen_function(Sym *sym)
     func_ind = ind;
     func_vt = sym->type.ref->type;
     func_var = sym->type.ref->f.func_type == FUNC_ELLIPSIS;
+    func_old = sym->type.ref->f.func_type == FUNC_OLD;
 
     /* NOTE: we patch the symbol size later */
     put_extern_sym(sym, cur_text_section, ind, 0);

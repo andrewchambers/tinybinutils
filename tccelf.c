@@ -1106,7 +1106,7 @@ ST_FUNC void relocate_syms(TCCState *s1, Section *symtab, int do_resolve)
             if (sym_bind == STB_WEAK)
                 sym->st_value = 0;
             else
-                tcc_error_noabort("undefined symbol '%s'", name);
+                tcc_error_noabort("unresolved reference to '%s'", name);
 
         } else if (sh_num < SHN_LORESERVE) {
             /* add section base */
@@ -2074,7 +2074,7 @@ static void bind_exe_dynsyms(TCCState *s1, int is_PIE)
                 if (ELFW(ST_BIND)(sym->st_info) == STB_WEAK ||
                     !strcmp(name, "_fp_hw")) {
                 } else {
-                    tcc_error_noabort("undefined symbol '%s'", name);
+                    tcc_error_noabort("unresolved reference to '%s'", name);
                 }
             }
         }
@@ -2105,7 +2105,7 @@ static void bind_libs_dynsyms(TCCState *s1)
             if (esym->st_shndx == SHN_UNDEF) {
                 /* weak symbols can stay undefined */
                 if (ELFW(ST_BIND)(esym->st_info) != STB_WEAK)
-                    tcc_warning("undefined dynamic symbol '%s'", name);
+                    tcc_warning("unresolved dynamic reference to '%s'", name);
             }
         }
     }
@@ -3301,6 +3301,8 @@ invalid:
                 continue;
             if (sh->sh_type != s->sh_type
                 && strcmp (s->name, ".eh_frame")
+                /* some crt1.o seem to have two ".note.GNU-stack" (SHT_NOTE & SHT_PROGBITS) */
+                && strcmp (s->name, ".note.GNU-stack")
                 ) {
                 tcc_error_noabort("section type conflict: %s %02x <> %02x", s->name, sh->sh_type, s->sh_type);
                 goto the_end;

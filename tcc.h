@@ -475,6 +475,9 @@ typedef struct CType {
     struct Sym *ref;
 } CType;
 
+/* long double words on host(!) platform */
+#define LDOUBLE_WORDS ((sizeof(long double)+3)/4)
+
 /* constant value */
 typedef union CValue {
     long double ld;
@@ -485,7 +488,7 @@ typedef union CValue {
         char *data;
         int size;
     } str;
-    int tab[LDOUBLE_SIZE/4];
+    int tab[LDOUBLE_WORDS];
 } CValue;
 
 /* value on stack */
@@ -1446,8 +1449,8 @@ ST_DATA int nocode_wanted; /* true if no code generation wanted for an expressio
 ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
 ST_DATA CType func_vt; /* current function return type (used by return instruction) */
 ST_DATA int func_var; /* true if current function is variadic */
-ST_DATA int func_vc;
-ST_DATA int func_ind;
+ST_DATA int func_vc; /* stack address for implicit struct return storage */
+ST_DATA int func_ind; /* function start address */
 ST_DATA const char *funcname;
 
 ST_FUNC void tccgen_init(TCCState *s1);

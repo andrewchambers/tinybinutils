@@ -314,7 +314,7 @@ static void gen_modrm_impl(int op_reg, int r, Sym *sym, int c, int is_got)
 	}
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
         /* currently, we use only ebp as base */
-        if (c == (char)c) {
+        if (c == (signed char)c) {
             /* short reference */
             o(0x45 | op_reg);
             g(c);
@@ -436,8 +436,7 @@ void load(int r, SValue *sv)
             b = 0xdb, r = 5; /* fldt */
         } else if ((ft & VT_TYPE) == VT_BYTE || (ft & VT_TYPE) == VT_BOOL) {
             b = 0xbe0f;   /* movsbl */
-        } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED) ||
-		   (ft & VT_TYPE) == (VT_BOOL | VT_UNSIGNED)) {
+        } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
             b = 0xb60f;   /* movzbl */
         } else if ((ft & VT_TYPE) == VT_SHORT) {
             b = 0xbf0f;   /* movswl */
@@ -532,8 +531,7 @@ void load(int r, SValue *sv)
                     o(0x44 + REG_VALUE(r)*8); /* %xmmN */
                     o(0xf024);
                 } else {
-		    if (!nocode_wanted)
-                        assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
+                    assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
                     if ((ft & VT_BTYPE) == VT_FLOAT) {
                         o(0x100ff3);
                     } else {
@@ -543,8 +541,7 @@ void load(int r, SValue *sv)
                     o(0xc0 + REG_VALUE(v) + REG_VALUE(r)*8);
                 }
             } else if (r == TREG_ST0) {
-		if (!nocode_wanted)
-                    assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
+                assert((v >= TREG_XMM0) && (v <= TREG_XMM7));
                 /* gen_cvt_ftof(VT_LDOUBLE); */
                 /* movsd %xmmN,-0x10(%rsp) */
                 o(0x110ff2);
@@ -749,7 +746,7 @@ static int arg_prepare_reg(int idx) {
 static void gen_offs_sp(int b, int r, int d)
 {
     orex(1,0,r & 0x100 ? 0 : r, b);
-    if (d == (char)d) {
+    if (d == (signed char)d) {
         o(0x2444 | (REG_VALUE(r) << 3));
         g(d);
     } else {
@@ -1052,7 +1049,7 @@ void gfunc_epilog(void)
 
 static void gadd_sp(int val)
 {
-    if (val == (char)val) {
+    if (val == (signed char)val) {
         o(0xc48348);
         g(val);
     } else {
@@ -1635,7 +1632,7 @@ void gjmp_addr(int a)
 {
     int r;
     r = a - ind - 2;
-    if (r == (char)r) {
+    if (r == (signed char)r) {
         g(0xeb);
         g(r);
     } else {
@@ -1704,7 +1701,7 @@ void gen_opi(int op)
             r = gv(RC_INT);
             vswap();
             c = vtop->c.i;
-            if (c == (char)c) {
+            if (c == (signed char)c) {
                 /* XXX: generate inc and dec for smaller code ? */
                 orex(ll, r, 0, 0x83);
                 o(0xc0 | (opc << 3) | REG_VALUE(r));

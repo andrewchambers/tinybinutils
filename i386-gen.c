@@ -271,7 +271,7 @@ static void gen_modrm(int opc, int op_r2, int r, Sym *sym, int c)
     } else if ((r & VT_VALMASK) == VT_LOCAL) {
 	o(opc);
         /* currently, we use only ebp as base */
-        if (c == (char)c) {
+        if (c == (signed char)c) {
             /* short reference */
             o(0x45 | op_reg);
             g(c);
@@ -439,7 +439,7 @@ ST_FUNC void store(int r, SValue *v)
 
 static void gadd_sp(int val)
 {
-    if (val == (char)val) {
+    if (val == (signed char)val) {
         o(0xc483);
         g(val);
     } else {
@@ -774,7 +774,7 @@ ST_FUNC void gjmp_addr(int a)
 {
     int r;
     r = a - ind - 2;
-    if (r == (char)r) {
+    if (r == (signed char)r) {
         g(0xeb);
         g(r);
     } else {
@@ -787,7 +787,7 @@ ST_FUNC void gjmp_addr(int a)
 ST_FUNC void gjmp_cond_addr(int a, int op)
 {
     int r = a - ind - 2;
-    if (r == (char)r)
+    if (r == (signed char)r)
         g(op - 32), g(r);
     else
         g(0x0f), gjmp2(op - 16, r - 4);
@@ -830,7 +830,7 @@ ST_FUNC void gen_opi(int op)
             r = gv(RC_INT);
             vswap();
             c = vtop->c.i;
-            if (c == (char)c) {
+            if (c == (signed char)c) {
                 /* generate inc and dec for smaller code */
                 if ((c == 1 || c == -1) && (op == '+' || op == '-')) {
                     opc = (c == 1) ^ (op == '+');

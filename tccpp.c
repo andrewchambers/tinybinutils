@@ -987,11 +987,7 @@ static inline int tok_size(const int *p)
     case TOK_CULLONG:
         return 1 + 2;
     case TOK_CLDOUBLE:
-#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
-        return 1 + 8 / 4;
-#else
-        return 1 + LDOUBLE_SIZE / 4;
-#endif
+        return 1 + LDOUBLE_WORDS;
     default:
         return 1 + 0;
     }
@@ -1130,22 +1126,12 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
         str[len++] = cv->tab[1];
         break;
     case TOK_CLDOUBLE:
-#if LDOUBLE_SIZE == 8 || defined TCC_USING_DOUBLE_FOR_LDOUBLE
         str[len++] = cv->tab[0];
         str[len++] = cv->tab[1];
-#elif LDOUBLE_SIZE == 12
-        str[len++] = cv->tab[0];
-        str[len++] = cv->tab[1];
+        if (LDOUBLE_WORDS >= 3)
         str[len++] = cv->tab[2];
-#elif LDOUBLE_SIZE == 16
-        str[len++] = cv->tab[0];
-        str[len++] = cv->tab[1];
-        str[len++] = cv->tab[2];
+        if (LDOUBLE_WORDS >= 4)
         str[len++] = cv->tab[3];
-#else
-#error add long double size support
-#endif
-        break;
     default:
         break;
     }
@@ -1219,15 +1205,7 @@ static inline void tok_get(int *t, const int **pp, CValue *cv)
         n = 2;
         goto copy;
     case TOK_CLDOUBLE:
-#if LDOUBLE_SIZE == 8 || defined TCC_USING_DOUBLE_FOR_LDOUBLE
-        n = 2;
-#elif LDOUBLE_SIZE == 12
-        n = 3;
-#elif LDOUBLE_SIZE == 16
-        n = 4;
-#else
-# error add long double size support
-#endif
+        n = LDOUBLE_WORDS;
     copy:
         do
             *tab++ = *p++;
