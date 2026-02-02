@@ -110,6 +110,21 @@ ST_FUNC void tccelf_new(TCCState *s)
     if (s->elf_entryname)
         set_global_sym(s, s->elf_entryname, NULL, 0); /* SHN_UNDEF */
 #endif
+
+#ifndef ELF_OBJ_ONLY
+    if (NULL == s->elfint && s1->output_type != TCC_OUTPUT_OBJ) {
+        const char *p = CONFIG_TCC_ELFINTERP;
+#ifdef TCC_TARGET_ARM
+        if (s->float_abi == ARM_HARD_FLOAT)
+            p = CONFIG_TCC_ELFINTERP_ARMHF;
+#endif
+#if defined TCC_IS_NATIVE && defined TARGETOS_BSD
+        /* see commit 55cb2170cd5ce77a7d76dcaf462fad2707281605 */
+        { const char *e = getenv("LD_SO"); if (e) p = e; }
+#endif
+        s->elfint = tcc_strdup(p);
+    }
+#endif /* ndef ELF_OBJ_ONLY */
 }
 
 ST_FUNC void free_section(Section *s)
@@ -2939,18 +2954,10 @@ static int elf_output_file(TCCState *s1, const char *filename)
 
         if (!s1->static_link) {
             if (file_type & TCC_OUTPUT_EXE) {
-                char *ptr;
-                /* allow override the dynamic loader */
-                const char *elfint = s1->elfint;
-                if (elfint == NULL)
-                    elfint = getenv("LD_SO");
-                if (elfint == NULL)
-                    elfint = DEFAULT_ELFINTERP(s1);
                 /* add interpreter section only if executable */
                 interp = new_section(s1, ".interp", SHT_PROGBITS, SHF_ALLOC);
                 interp->sh_addralign = 1;
-                ptr = section_ptr_add(interp, 1 + strlen(elfint));
-                strcpy(ptr, elfint);
+                put_elf_str(interp, s1->elfint);
                 dyninf.interp = interp;
             }
 

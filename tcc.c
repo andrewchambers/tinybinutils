@@ -226,7 +226,7 @@ static void print_search_dirs(TCCState *s)
     printf("libtcc1:\n  %s/%s\n", s->library_paths[0], CONFIG_TCC_CROSSPREFIX TCC_LIBTCC1);
 #ifdef TCC_TARGET_UNIX
     print_dirs("crt", s->crt_paths, s->nb_crt_paths);
-    printf("elfinterp:\n  %s\n",  DEFAULT_ELFINTERP(s));
+    printf("elfinterp:\n  %s\n",  s->elfint);
 #endif
 }
 

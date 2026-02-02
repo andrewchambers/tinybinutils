@@ -18,11 +18,6 @@
 #define PCRELATIVE_DLLPLT 1
 #define RELOCATE_DLLPLT 1
 
-enum float_abi {
-    ARM_SOFTFP_FLOAT,
-    ARM_HARD_FLOAT,
-};
-
 #else /* !TARGET_DEFS_ONLY */
 
 #include "tcc.h"

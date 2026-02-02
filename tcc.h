@@ -252,15 +252,14 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #ifndef CONFIG_SYSROOT
 # define CONFIG_SYSROOT ""
 #endif
+
 #if !defined CONFIG_TCCDIR && !defined _WIN32
 # define CONFIG_TCCDIR "/usr/local/lib/tcc"
 #endif
-#ifndef CONFIG_LDDIR
-# define CONFIG_LDDIR "lib"
-#endif
+
 #ifdef CONFIG_TRIPLET
 # define USE_TRIPLET(s) s "/" CONFIG_TRIPLET
-# define ALSO_TRIPLET(s) USE_TRIPLET(s) ":" s
+# define ALSO_TRIPLET(s) USE_TRIPLET(s) PATHSEP s
 #else
 # define USE_TRIPLET(s) s
 # define ALSO_TRIPLET(s) s
@@ -268,11 +267,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 
 /* path to find crt1.o, crti.o and crtn.o */
 #ifndef CONFIG_TCC_CRTPREFIX
-# define CONFIG_TCC_CRTPREFIX USE_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR)
-#endif
-
-#ifndef CONFIG_USR_INCLUDE
-# define CONFIG_USR_INCLUDE "/usr/include"
+# define CONFIG_TCC_CRTPREFIX \
+    USE_TRIPLET(CONFIG_SYSROOT "/usr/lib")
 #endif
 
 /* Below: {B} is substituted by CONFIG_TCCDIR (rsp. -B option) */
@@ -280,25 +276,22 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* system include paths */
 #ifndef CONFIG_TCC_SYSINCLUDEPATHS
 # if defined TCC_TARGET_PE || defined _WIN32
-#  define CONFIG_TCC_SYSINCLUDEPATHS "{B}/include"PATHSEP"{B}/include/winapi"
+#  define CONFIG_TCC_SYSINCLUDEPATHS \
+    "{B}/include" PATHSEP "{B}/include/winapi"
 # else
 #  define CONFIG_TCC_SYSINCLUDEPATHS \
-        "{B}/include" \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/include") \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT CONFIG_USR_INCLUDE)
+    "{B}/include" PATHSEP ALSO_TRIPLET(CONFIG_SYSROOT "/usr/include")
 # endif
 #endif
 
 /* library search paths */
 #ifndef CONFIG_TCC_LIBPATHS
 # if defined TCC_TARGET_PE || defined _WIN32
-#  define CONFIG_TCC_LIBPATHS "{B}/lib"
+#  define CONFIG_TCC_LIBPATHS \
+    "{B}/lib"
 # else
 #  define CONFIG_TCC_LIBPATHS \
-        "{B}" \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/" CONFIG_LDDIR) \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) \
-    ":" ALSO_TRIPLET(CONFIG_SYSROOT "/usr/local/" CONFIG_LDDIR)
+    "{B}" PATHSEP ALSO_TRIPLET(CONFIG_SYSROOT "/usr/lib")
 # endif
 #endif
 
@@ -314,26 +307,17 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_TARGET_RISCV64)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-riscv64-lp64d.so.1"
-# elif defined(TCC_ARM_EABI)
-#  define DEFAULT_ELFINTERP(s) default_elfinterp(s)
+# elif defined(TCC_TARGET_ARM)
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.3"
+#  define CONFIG_TCC_ELFINTERP_ARMHF "/lib/ld-linux-armhf.so.3"
 # else
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux.so.2"
 # endif
 #endif
 
-/* var elf_interp dans *-gen.c */
-#ifndef DEFAULT_ELFINTERP
-# define DEFAULT_ELFINTERP(s) CONFIG_TCC_ELFINTERP
-#endif
-
 /* (target specific) libtcc1.a */
 #ifndef TCC_LIBTCC1
 # define TCC_LIBTCC1 "libtcc1.a"
-#endif
-
-/* library to use with CONFIG_USE_LIBGCC instead of libtcc1.a */
-#if defined CONFIG_USE_LIBGCC && !defined TCC_LIBGCC
-#define TCC_LIBGCC USE_TRIPLET(CONFIG_SYSROOT "/" CONFIG_LDDIR) "/libgcc_s.so.1"
 #endif
 
 /* <cross-prefix-to->libtcc1.a */

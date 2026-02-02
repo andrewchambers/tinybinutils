@@ -896,8 +896,8 @@ LIBTCCAPI TCCState *tcc_new(void)
 #if defined TCC_TARGET_MACHO /* || defined TCC_TARGET_PE */
     s->leading_underscore = 1;
 #endif
-#ifdef TCC_TARGET_ARM
-    s->float_abi = ARM_FLOAT_ABI;
+#ifdef TCC_ARM_HARDFLOAT
+    s->float_abi = ARM_HARD_FLOAT;
 #endif
 #ifdef CONFIG_NEW_DTAGS
     s->enable_new_dtags = 1;
@@ -995,10 +995,12 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     /* allow linking with system dll's directly */
     tcc_add_systemdir(s);
 # endif
+
 #elif defined TCC_TARGET_MACHO
 # ifdef TCC_IS_NATIVE
     tcc_add_macos_sdkpath(s);
 # endif
+
 #else
     /* paths for crt objects */
     tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
@@ -1362,10 +1364,11 @@ struct lopt {
 /* match linker option */
 static int link_option(struct lopt *o, const char *q)
 {
-    const char *p = o->opt;
+    const char *p;
     int c;
-
+redo:
     /* there should be 1 or 2 dashes */
+    p = o->opt;
     if (*p++ != '-')
         return 0;
     if (*p == '-')
@@ -1378,16 +1381,22 @@ static int link_option(struct lopt *o, const char *q)
             goto succ; /* -Wl,-opt=arg */
         ++q;
     }
-    if (c == '=' || c == ':') {
-        if (*p == '\0') {
+    if (*p == '\0') {
+        if (c == '|')
+            goto succ;
+        if (c == '=' || c == ':') {
             if (o->s->link_optind + 1 < o->s->link_argc) {
                 p = o->s->link_argv[++o->s->link_optind];
                 goto succ; /* -Wl,-opt,arg */
             }
             o->match = 1; /* -Wl,-opt -Wl,arg */
-        } else if (c == ':')
-            goto succ; /* -Wl,-Iarg */
-    }
+            return 0;
+        }
+    } else if (c == ':')
+        goto succ; /* -Wl,-Iarg */
+    while (*q)
+        if (*q++ == '|')
+            goto redo;
     return 0;
 succ:
     o->arg = p;
@@ -1415,9 +1424,9 @@ static int tcc_set_linker(TCCState *s, const char *optarg)
             s->symbolic = 1;
         } else if (link_option(&o, "nostdlib")) {
             s->nostdlib_paths = 1;
-        } else if (link_option(&o, "e=") || link_option(&o, "entry=")) {
+        } else if (link_option(&o, "e=|entry=")) {
             tcc_set_str(&s->elf_entryname, o.arg);
-        } else if (link_option(&o, "image-base=") || link_option(&o, "Ttext=")) {
+        } else if (link_option(&o, "image-base=|Ttext=")) {
             s->text_addr = strtoull(o.arg, &end, 16);
             s->has_text_addr = 1;
         } else if (link_option(&o, "init=")) {
@@ -1446,18 +1455,17 @@ static int tcc_set_linker(TCCState *s, const char *optarg)
 #endif
             else
                 goto err;
-        } else if (link_option(&o, "export-all-symbols")
-                || link_option(&o, "export-dynamic")) {
+        } else if (link_option(&o, "export-all-symbols|export-dynamic|E")) {
             s->rdynamic = 1;
         } else if (link_option(&o, "rpath=")) {
             tcc_concat_str(&s->rpath, o.arg, ':');
-        } else if (link_option(&o, "dynamic-linker=") || link_option(&o, "I:")) {
+        } else if (link_option(&o, "dynamic-linker=|I:")) {
             tcc_set_str(&s->elfint, o.arg);
         } else if (link_option(&o, "enable-new-dtags")) {
             s->enable_new_dtags = 1;
         } else if (link_option(&o, "section-alignment=")) {
             s->section_align = strtoul(o.arg, &end, 16);
-        } else if (link_option(&o, "soname=") || link_option(&o, "install_name=")) {
+        } else if (link_option(&o, "soname=|install_name=")) {
             tcc_set_str(&s->soname, o.arg);
         } else if (link_option(&o, "whole-archive")) {
             s->filetype |= AFF_WHOLE_ARCHIVE;
@@ -2024,7 +2032,7 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv)
                 s->float_abi = ARM_HARD_FLOAT;
             else
                 return tcc_error_noabort("unsupported float abi '%s'", optarg);
-            break;
+            continue;
 #endif
         case TCC_OPTION_m:
             if (set_flag(s, options_m, optarg) < 0) {

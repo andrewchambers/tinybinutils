@@ -133,11 +133,8 @@ enum {
 
 #define CHAR_IS_UNSIGNED
 
-#ifdef TCC_ARM_HARDFLOAT
-# define ARM_FLOAT_ABI ARM_HARD_FLOAT
-#else
-# define ARM_FLOAT_ABI ARM_SOFTFP_FLOAT
-#endif
+#define ARM_SOFTFP_FLOAT 0
+#define ARM_HARD_FLOAT 1
 
 /******************************************************/
 #else /* ! TARGET_DEFS_ONLY */
@@ -160,8 +157,6 @@ ST_DATA const char * const target_machine_defs =
 #endif
     ;
 
-enum float_abi float_abi;
-
 ST_DATA const int reg_classes[NB_REGS] = {
     /* r0 */ RC_INT | RC_R0,
     /* r1 */ RC_INT | RC_R1,
@@ -180,6 +175,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 #endif
 };
 
+static int float_abi;
 static int func_sub_sp_offset, last_itod_magic;
 static int leaffunc;
 
@@ -240,16 +236,6 @@ static int regmask(int r) {
 }
 
 /******************************************************/
-
-#if defined(TCC_ARM_EABI) && !defined(CONFIG_TCC_ELFINTERP)
-const char *default_elfinterp(struct TCCState *s)
-{
-    if (s->float_abi == ARM_HARD_FLOAT)
-        return "/lib/ld-linux-armhf.so.3";
-    else
-        return "/lib/ld-linux.so.3";
-}
-#endif
 
 void o(uint32_t i)
 {
