@@ -264,9 +264,9 @@ ST_FUNC void libc_free(void *ptr)
 /* global so that every tcc_alloc()/tcc_free() call doesn't need to be changed */
 static void *(*reallocator)(void*, unsigned long) = default_reallocator;
 
-LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *realloc)
+LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *my_realloc)
 {
-    reallocator = realloc ? realloc : default_reallocator;
+    reallocator = my_realloc ? my_realloc : default_reallocator;
 }
 
 /* in case MEM_DEBUG is #defined */
