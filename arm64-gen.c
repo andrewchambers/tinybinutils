@@ -299,14 +299,15 @@ static void arm64_spoff(int reg, uint64_t off)
 static uint64_t arm64_check_offset(int invert, int sz_, uint64_t off)
 {
     uint32_t sz = sz_;
-    if (!(off & ~((uint32_t)0xfff << sz)) ||
+    uint64_t scaled_mask = 0xffful << sz;
+
+    if (!(off & ~scaled_mask) ||
         (off < 256 || -off <= 256))
         return invert ? off : 0ul;
-    else if ((off & ((uint32_t)0xfff << sz)))
-        return invert ? off & ((uint32_t)0xfff << sz)
-		      : off & ~((uint32_t)0xfff << sz);
-    else if (off & 0x1ff)
-        return invert ? off & 0x1ff : off & ~0x1ff;
+    else if (off & scaled_mask)
+        return invert ? off & scaled_mask : off & ~scaled_mask;
+    else if (off & 0x1fful)
+        return invert ? off & 0x1fful : off & ~0x1fful;
     else
         return invert ? 0ul : off;
 }
@@ -314,9 +315,10 @@ static uint64_t arm64_check_offset(int invert, int sz_, uint64_t off)
 static void arm64_ldrx(int sg, int sz_, int dst, int bas, uint64_t off)
 {
     uint32_t sz = sz_;
+    uint64_t scaled_mask = 0xffful << sz;
     if (sz >= 2)
         sg = 0;
-    if (!(off & ~((uint32_t)0xfff << sz)))
+    if (!(off & ~scaled_mask))
         o(0x39400000 | dst | bas << 5 | off << (10 - sz) |
           (uint32_t)!!sg << 23 | sz << 30); // ldr(*) x(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
@@ -332,7 +334,9 @@ static void arm64_ldrx(int sg, int sz_, int dst, int bas, uint64_t off)
 static void arm64_ldrv(int sz_, int dst, int bas, uint64_t off)
 {
     uint32_t sz = sz_;
-    if (!(off & ~((uint32_t)0xfff << sz)))
+    uint64_t scaled_mask = 0xffful << sz;
+
+    if (!(off & ~scaled_mask))
         o(0x3d400000 | dst | bas << 5 | off << (10 - sz) |
           (sz & 4) << 21 | (sz & 3) << 30); // ldr (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
@@ -429,7 +433,9 @@ static void arm64_ldrs(int reg_, int size)
 static void arm64_strx(int sz_, int dst, int bas, uint64_t off)
 {
     uint32_t sz = sz_;
-    if (!(off & ~((uint32_t)0xfff << sz)))
+    uint64_t scaled_mask = 0xffful << sz;
+
+    if (!(off & ~scaled_mask))
         o(0x39000000 | dst | bas << 5 | off << (10 - sz) | sz << 30);
         // str(*) x(dst),[x(bas],#(off)]
     else if (off < 256 || -off <= 256)
@@ -445,7 +451,9 @@ static void arm64_strx(int sz_, int dst, int bas, uint64_t off)
 static void arm64_strv(int sz_, int dst, int bas, uint64_t off)
 {
     uint32_t sz = sz_;
-    if (!(off & ~((uint32_t)0xfff << sz)))
+    uint64_t scaled_mask = 0xffful << sz;
+
+    if (!(off & ~scaled_mask))
         o(0x3d000000 | dst | bas << 5 | off << (10 - sz) |
           (sz & 4) << 21 | (sz & 3) << 30); // str (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
@@ -491,15 +499,15 @@ ST_FUNC void load(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~(VT_BOUNDED | VT_NONCONST);
     int svrv = svr & VT_VALMASK;
-    uint64_t svcul = (uint32_t)sv->c.i;
-    svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
+    uint64_t svcul = sv->c.i;
+    uint64_t svcoff = (int32_t)sv->c.i;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
-            arm64_ldrv(arm64_type_size(svtt), fltr(r), 29, svcul);
+            arm64_ldrv(arm64_type_size(svtt), fltr(r), 29, svcoff);
         else
             arm64_ldrx(!(svtt & VT_UNSIGNED), arm64_type_size(svtt),
-                       intr(r), 29, svcul);
+                       intr(r), 29, svcoff);
         return;
     }
 
@@ -570,10 +578,10 @@ ST_FUNC void load(int r, SValue *sv)
     }
 
     if (svr == VT_LOCAL) {
-        if (-svcul < 0x1000)
-            o(0xd10003a0 | intr(r) | -svcul << 10); // sub x(r),x29,#...
+        if (-svcoff < 0x1000)
+            o(0xd10003a0 | intr(r) | -svcoff << 10); // sub x(r),x29,#...
         else {
-            arm64_movimm(30, -svcul); // use x30 for offset
+            arm64_movimm(30, -svcoff); // use x30 for offset
             o(0xcb0003a0 | intr(r) | (uint32_t)30 << 16); // sub x(r),x29,x30
         }
         return;
@@ -589,7 +597,7 @@ ST_FUNC void load(int r, SValue *sv)
     }
 
     if (svr == (VT_LLOCAL | VT_LVAL)) {
-        arm64_ldrx(0, 3, 30, 29, svcul); // use x30 for offset
+        arm64_ldrx(0, 3, 30, 29, svcoff); // use x30 for offset
         if (IS_FREG(r))
             arm64_ldrv(arm64_type_size(svtt), fltr(r), 30, 0);
         else
@@ -603,7 +611,7 @@ ST_FUNC void load(int r, SValue *sv)
         return;
     }
 
-    printf("load(%x, (%x, %x, %lx))\n", r, svtt, sv->r, (long)svcul);
+    printf("load(%x, (%x, %x, %llx))\n", r, svtt, sv->r, (long long)svcul);
     assert(0);
 }
 
@@ -612,14 +620,13 @@ ST_FUNC void store(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~VT_BOUNDED;
     int svrv = svr & VT_VALMASK;
-    uint64_t svcul = (uint32_t)sv->c.i;
-    svcul = svcul >> 31 & 1 ? svcul - ((uint64_t)1 << 32) : svcul;
+    uint64_t svcoff = (int32_t)sv->c.i;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
-            arm64_strv(arm64_type_size(svtt), fltr(r), 29, svcul);
+            arm64_strv(arm64_type_size(svtt), fltr(r), 29, svcoff);
         else
-            arm64_strx(arm64_type_size(svtt), intr(r), 29, svcul);
+            arm64_strx(arm64_type_size(svtt), intr(r), 29, svcoff);
         return;
     }
 
@@ -650,17 +657,17 @@ ST_FUNC void store(int r, SValue *sv)
 
     if (svr == (VT_CONST | VT_LVAL | VT_SYM)) {
         arm64_sym(30, sv->sym, // use x30 for address
-		  arm64_check_offset(0, arm64_type_size(svtt), svcul));
+		  arm64_check_offset(0, arm64_type_size(svtt), svcoff));
         if (IS_FREG(r))
             arm64_strv(arm64_type_size(svtt), fltr(r), 30,
-		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
+		       arm64_check_offset(1, arm64_type_size(svtt), svcoff));
         else
             arm64_strx(arm64_type_size(svtt), intr(r), 30,
-		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
+		       arm64_check_offset(1, arm64_type_size(svtt), svcoff));
         return;
     }
 
-    printf("store(%x, (%x, %x, %lx))\n", r, svtt, sv->r, (long)svcul);
+    printf("store(%x, (%x, %x, %llx))\n", r, svtt, sv->r, (long long)svcoff);
     assert(0);
 }
 
@@ -1637,7 +1644,7 @@ static int arm64_gen_opic(int op, uint32_t l, int rev, uint64_t val,
         uint32_t s = l ? val >> 63 : val >> 31;
         val = s ? -val : val;
         val = l ? val : (uint32_t)val;
-        if (!(val & ~(uint64_t)0xfff))
+        if (!(val & ~0xffful))
             o(0x11000000 | l << 31 | s << 30 | x | a << 5 | val << 10);
         else if (!(val & ~(uint64_t)0xfff000))
             o(0x11400000 | l << 31 | s << 30 | x | a << 5 | val >> 12 << 10);
