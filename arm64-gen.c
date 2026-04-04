@@ -729,10 +729,7 @@ static void gen_bounds_epilog(void)
     if (offset_modified) {
         saved_ind = ind;
         ind = func_bound_ind;
-        greloca(cur_text_section, sym_data, ind, R_AARCH64_ADR_GOT_PAGE, 0);
-        o(0x90000000 | 0);            // adrp x0, #sym_data
-        greloca(cur_text_section, sym_data, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
-        o(0xf9400000 | 0 | (0 << 5)); // ld x0,[x0, #sym_data]
+        arm64_sym(0, sym_data, 0);
         gen_bounds_call(TOK___bound_local_new);
         ind = saved_ind;
     }
@@ -740,10 +737,7 @@ static void gen_bounds_epilog(void)
     /* generate bound check local freeing */
     o(0xa9bf07e0); /* stp x0, x1, [sp, #-16]! */
     o(0x3c9f0fe0); /* str q0, [sp, #-16]! */
-    greloca(cur_text_section, sym_data, ind, R_AARCH64_ADR_GOT_PAGE, 0);
-    o(0x90000000 | 0);            // adrp x0, #sym_data
-    greloca(cur_text_section, sym_data, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
-    o(0xf9400000 | 0 | (0 << 5)); // ld x0,[x0, #sym_data]
+    arm64_sym(0, sym_data, 0);
     gen_bounds_call(TOK___bound_local_delete);
     o(0x3cc107e0); /* ldr q0, [sp], #16 */
     o(0xa8c107e0); /* ldp x0, x1, [sp], #16 */
@@ -2085,10 +2079,7 @@ ST_FUNC void gen_increment_tcov (SValue *sv)
     vpushv(sv);
     vtop->r = r1 = get_reg(RC_INT);
     r2 = get_reg(RC_INT);
-    greloca(cur_text_section, sv->sym, ind, R_AARCH64_ADR_GOT_PAGE, 0);
-    o(0x90000000 | r1);            // adrp r1, #sym
-    greloca(cur_text_section, sv->sym, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
-    o(0xf9400000 | r1 | (r1 << 5)); // ld xr,[xr, #sym]
+    arm64_sym(r1, sv->sym, 0);
     o(0xf9400000 | (intr(r1)<<5) | intr(r2)); // ldr r2, [r1]
     o(0x91000400 | (intr(r2)<<5) | intr(r2)); // add r2, r2, #1
     o(0xf9000000 | (intr(r1)<<5) | intr(r2)); // str r2, [r1]
