@@ -48,6 +48,21 @@ ifeq (-$(CONFIG_WIN32)-,-yes-)
  SKIP += 117_builtins.test # win32 port doesn't define __builtins
  SKIP += 124_atomic_counter.test # No pthread support
 endif
+ifneq (,$(filter arm% riscv%,$(ARCH)))
+ SKIP += 85_asm-outside-function.test
+ SKIP += 98_al_ax_extend.test
+ SKIP += 99_fastcall.test
+ SKIP += 127_asm_goto.test
+endif
+ifeq (,$(filter arm64 aarch64,$(ARCH)))
+ SKIP += 138_arm64_encoding.test
+ SKIP += 139_arm64_errors.test
+endif
+ifneq (,$(findstring win32,$(CROSS_TARGET)))
+ SKIP += 106_versym.test
+ SKIP += 114_bound_signal.test
+ SKIP += 124_atomic_counter.test
+endif
 ifneq (,$(filter OpenBSD FreeBSD NetBSD,$(TARGETOS)))
  SKIP += 106_versym.test # no pthread_condattr_setpshared
  SKIP += 114_bound_signal.test # libc problem signal/fork
@@ -73,6 +88,7 @@ endif
 
 # These tests run several snippets from the same file one by one
 60_errors_and_warnings.test : FLAGS += -dt
+139_arm64_errors.test : FLAGS += -dt
 96_nodata_wanted.test : FLAGS += -dt
 
 # Always generate certain .expects (don't put these in the GIT),
