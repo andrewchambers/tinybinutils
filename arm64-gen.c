@@ -993,6 +993,32 @@ static int n_func_args(CType *type)
     return n_args;
 }
 
+static void arm64_sub_sp(uint64_t diff)
+{
+    if (!diff)
+        return;
+#ifdef TCC_TARGET_PE
+    if (diff >= 4096) {
+        Sym *sym = external_helper_sym(TOK___chkstk);
+
+        arm64_movimm(15, diff >> 4);
+        greloca(cur_text_section, sym, ind, R_AARCH64_CALL26, 0);
+        o(ARM64_BL); // bl __chkstk
+        o(0xcb2f73ff); // sub sp,sp,x15,lsl #4
+        return;
+    }
+#endif
+    if (!(diff >> 24)) {
+        if (diff & 0xffful)
+            o(ARM64_SUB_IMM | ARM64_SF(1) | 0           | ARM64_RN(31) | ARM64_RD(31) | ARM64_IMM12(diff & 0xfff));
+        if (diff >> 12)
+            o(ARM64_SUB_IMM | ARM64_SF(1) | ARM64_SH(1) | ARM64_RN(31) | ARM64_RD(31) | ARM64_IMM12((diff >> 12) & 0xfff));
+    } else {
+        arm64_movimm(16, diff);
+        o(0xCB3063FFU); // sub sp,sp,x16
+    }
+}
+
 ST_FUNC void gfunc_call(int nb_args)
 {
     CType *return_type;
@@ -1039,10 +1065,7 @@ ST_FUNC void gfunc_call(int nb_args)
 
     if (stack >= 0x1000000) // 16Mb
         tcc_error("stack size too big %lu", stack);
-    if (stack & 0xfff)
-        o(0xd10003ff | (stack & 0xfff) << 10); // sub sp,sp,#(n)
-    if (stack >> 12)
-            o(0xd14003ff | (stack >> 12) << 10);
+    arm64_sub_sp(stack);
 
     // First pass: set all values on stack
     for (i = nb_args; i; i--) {
@@ -1178,6 +1201,9 @@ static int arm64_func_va_list_gr_offs;
 static int arm64_func_va_list_vr_offs;
 static int arm64_func_sub_sp_offset;
 
+static unsigned arm64_func_start_offset;
+#define ARM64_FUNC_STACK_SETUP_SLOTS 6
+
 ST_FUNC void gfunc_prolog(Sym *func_sym)
 {
     CType *func_type = &func_sym->type;
@@ -1229,6 +1255,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     last_int = last_int > 4 ? 4 : last_int;
     last_float = last_float > 4 ? 4 : last_float;
 
+    arm64_func_start_offset = ind;
     o(0xa9b27bfd); // stp x29,x30,[sp,#-224]!
     for (i = 0; i < last_float; i++)
         // stp q0,q1,[sp,#16], stp q2,q3,[sp,#48]
@@ -1279,9 +1306,9 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     o(0x910003fd); // mov x29,sp
     arm64_func_sub_sp_offset = ind;
-    // In gfunc_epilog these will be replaced with code to decrement SP:
-    o(0xd503201f); // nop
-    o(0xd503201f); // nop
+    /* In gfunc_epilog these will be replaced with stack setup code. */
+    for (i = 0; i < ARM64_FUNC_STACK_SETUP_SLOTS; ++i)
+        o(ARM64_NOP); // nop
     loc = 0;
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check)
@@ -1478,32 +1505,15 @@ ST_FUNC void gfunc_epilog(void)
 
     if (loc) {
         // Insert instructions to subtract size of stack frame from SP.
-        unsigned char *ptr = cur_text_section->data + arm64_func_sub_sp_offset;
+        int i;
+        addr_t saved_ind = ind;
+        addr_t patch_end = arm64_func_sub_sp_offset + ARM64_FUNC_STACK_SETUP_SLOTS * 4;
         uint64_t diff = (-loc + 15) & ~15;
-        if (!(diff >> 24)) {
-            if (diff & 0xfff) // sub sp,sp,#(diff & 0xfff)
-                write32le(ptr, 0xd10003ff | (diff & 0xfff) << 10);
-            if (diff >> 12) // sub sp,sp,#(diff >> 12),lsl #12
-                write32le(ptr + 4, 0xd14003ff | (diff >> 12) << 10);
-        }
-        else {
-            // In this case we may subtract more than necessary,
-            // but always less than 17/16 of what we were aiming for.
-            int i = 0;
-            int j = 0;
-            while (diff >> 20) {
-                diff = (diff + 0xffff) >> 16;
-                ++i;
-            }
-            while (diff >> 16) {
-                diff = (diff + 1) >> 1;
-                ++j;
-            }
-            write32le(ptr, 0xd2800010 | diff << 5 | i << 21);
-            // mov x16,#(diff),lsl #(16 * i)
-            write32le(ptr + 4, 0xcb3063ff | j << 10);
-            // sub sp,sp,x16,lsl #(j)
-        }
+        ind = arm64_func_sub_sp_offset;
+        arm64_sub_sp(diff);
+        for (i = ind; i < patch_end; i += 4)
+            write32le(cur_text_section->data + i, ARM64_NOP); // nop
+        ind = saved_ind;
     }
     o(0x910003bf); // mov sp,x29
     o(0xa8ce7bfd); // ldp x29,x30,[sp],#224
