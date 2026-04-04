@@ -754,14 +754,8 @@ static int arm64_hfa_aux(CType *type, int *fsize, int num)
         return num + 1;
     }
     else if ((type->t & VT_BTYPE) == VT_STRUCT) {
-        int is_struct = 0; // rather than union
         Sym *field;
-        for (field = type->ref->next; field; field = field->next)
-            if (field->c) {
-                is_struct = 1;
-                break;
-            }
-        if (is_struct) {
+        if (!IS_UNION(type->t)) {
             int num0 = num;
             for (field = type->ref->next; field; field = field->next) {
                 if (field->c != (num - num0) * *fsize)
@@ -1026,8 +1020,10 @@ ST_FUNC void gfunc_call(int nb_args)
     unsigned long *a, *a1;
     unsigned long stack;
     int i;
-    int variadic = (vtop[-nb_args].type.ref->f.func_type == FUNC_ELLIPSIS);
-    int var_nb_arg = n_func_args(&vtop[-nb_args].type);
+    int func_type = vtop[-nb_args].type.ref->f.func_type;
+    int variadic = (func_type == FUNC_ELLIPSIS);
+    int old_style = (func_type == FUNC_OLD);
+    int var_nb_arg = variadic ? n_func_args(&vtop[-nb_args].type) : 0;
 
     save_regs(nb_args + 1);
 
@@ -1113,7 +1109,14 @@ ST_FUNC void gfunc_call(int nb_args)
     for (i = nb_args; i; i--, vtop--) {
         if (a[i] < 16 && !(a[i] & 1)) {
             // value in general-purpose registers
-            if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
+            if ((variadic || old_style) && i > var_nb_arg && is_float(vtop->type.t)) {
+                gv(RC_FLOAT);
+                if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
+                    o(ARM64_FMOV_XD | intr(a[i] / 2) | fltr(vtop->r) << 5); // fmov xN,dM
+                else
+                    o(ARM64_FMOV_WS | intr(a[i] / 2) | fltr(vtop->r) << 5); // fmov wN,sM
+            }
+            else if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
                 int align, size = type_size(&vtop->type, &align);
                 if (size) {
                     vtop->type.t = VT_PTR;
@@ -1132,14 +1135,20 @@ ST_FUNC void gfunc_call(int nb_args)
             // value in floating-point registers
             if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
                 uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
-                vtop->type.t = VT_PTR;
-                gaddrof();
-                gv(RC_R30);
-                for (j = 0; j < n; j++)
-                    o(0x3d4003c0 |
-                      (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
-                      (a[i] / 2 - 8 + j) |
-                      j << 10); // ldr ([sdq])(*),[x30,#(j * sz)]
+                if (n > 0) {
+                    /* HFA struct - load from memory into float registers */
+                    vtop->type.t = VT_PTR;
+                    gaddrof();
+                    gv(RC_R30);
+                    for (j = 0; j < n; j++)
+                        o(0x3d4003c0 |
+                          (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
+                          (a[i] / 2 - 8 + j) |
+                          j << 10); // ldr ([sdq])(*),[x30,#(j * sz)]
+                } else {
+                    /* Non-HFA struct in float register slot - shouldn't happen */
+                    gv(RC_F(a[i] / 2 - 8));
+                }
             }
             else
                 gv(RC_F(a[i] / 2 - 8));
@@ -1181,6 +1190,7 @@ ST_FUNC void gfunc_call(int nb_args)
 
             }
             else if (a[0] == 16) {
+                /* HFA struct return - store from float registers to the address in x8 */
                 uint32_t j, sz, n = arm64_hfa(return_type, &sz);
                 for (j = 0; j < n; j++)
                     o(0x3d000100 |
@@ -1292,11 +1302,11 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
         // HFAs of float and double need to be written differently:
         if (16 <= a[i] && a[i] < 32 && (sym->type.t & VT_BTYPE) == VT_STRUCT) {
             uint32_t j, sz, k = arm64_hfa(&sym->type, &sz);
-            if (sz < 16)
+            if (k > 0 && sz < 16)
                 for (j = 0; j < k; j++) {
                     o(0x3d0003e0 | -(sz & 8) << 27 | (sz & 4) << 29 |
                       ((a[i] - 16) / 2 + j) | (off / sz + j) << 10);
-                    // str ([sdq])(*),[sp,#(j * sz)]
+                    // str ([sdq])(j),[sp,#(j * sz)]
                 }
         }
     }
@@ -1479,7 +1489,8 @@ ST_FUNC void gfunc_return(CType *func_type)
     }
     case 16:
         if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
-          uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
+          /* HFA struct return - load from the address on vtop into float registers */
+          uint32_t j, sz, n = arm64_hfa(func_type, &sz);
           gaddrof();
           gv(RC_R(0));
           for (j = 0; j < n; j++)
