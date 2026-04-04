@@ -181,35 +181,35 @@ static uint32_t arm64_movi(int r, uint64_t x)
     uint64_t m = 0xffff;
     int e;
     if (!(x & ~m))
-        return 0x52800000 | r | x << 5; // movz w(r),#(x)
+        return ARM64_MOVZ | r | x << 5; // movz w(r),#(x)
     if (!(x & ~(m << 16)))
-        return 0x52a00000 | r | x >> 11; // movz w(r),#(x >> 16),lsl #16
+        return (ARM64_MOVZ | ARM64_HW(1) | r | x >> 11); // movz w(r),#(x >> 16),lsl #16
     if (!(x & ~(m << 32)))
-        return 0xd2c00000 | r | x >> 27; // movz x(r),#(x >> 32),lsl #32
+        return (ARM64_MOVZ64 | ARM64_HW(2) | r | x >> 27); // movz x(r),#(x >> 32),lsl #32
     if (!(x & ~(m << 48)))
-        return 0xd2e00000 | r | x >> 43; // movz x(r),#(x >> 48),lsl #48
+        return (ARM64_MOVZ64 | ARM64_HW(3) | r | x >> 43); // movz x(r),#(x >> 48),lsl #48
     if ((x & ~m) == m << 16)
-        return (0x12800000 | r |
+        return (ARM64_MOVN | r |
                 (~x << 5 & 0x1fffe0)); // movn w(r),#(~x)
     if ((x & ~(m << 16)) == m)
-        return (0x12a00000 | r |
+        return (ARM64_MOVN | ARM64_HW(1) | r |
                 (~x >> 11 & 0x1fffe0)); // movn w(r),#(~x >> 16),lsl #16
     if (!~(x | m))
-        return (0x92800000 | r |
+        return (ARM64_MOVN64 | r |
                 (~x << 5 & 0x1fffe0)); // movn x(r),#(~x)
     if (!~(x | m << 16))
-        return (0x92a00000 | r |
+        return (ARM64_MOVN64 | ARM64_HW(1) | r |
                 (~x >> 11 & 0x1fffe0)); // movn x(r),#(~x >> 16),lsl #16
     if (!~(x | m << 32))
-        return (0x92c00000 | r |
+        return (ARM64_MOVN64 | ARM64_HW(2) | r |
                 (~x >> 27 & 0x1fffe0)); // movn x(r),#(~x >> 32),lsl #32
     if (!~(x | m << 48))
-        return (0x92e00000 | r |
+        return (ARM64_MOVN64 | ARM64_HW(3) | r |
                 (~x >> 43 & 0x1fffe0)); // movn x(r),#(~x >> 32),lsl #32
     if (!(x >> 32) && (e = arm64_encode_bimm64(x | x << 32)) >= 0)
-        return 0x320003e0 | r | (uint32_t)e << 10; // movi w(r),#(x)
+        return (ARM64_ORR_IMM | r | (uint32_t)e << 10); // movi w(r),#(x)
     if ((e = arm64_encode_bimm64(x)) >= 0)
-        return 0xb20003e0 | r | (uint32_t)e << 10; // movi x(r),#(x)
+        return (ARM64_ORR_IMM | ARM64_SF(1) | r | (uint32_t)e << 10); // movi x(r),#(x)
     return 0;
 }
 
@@ -221,7 +221,7 @@ static void arm64_movimm(int r, uint64_t x)
     else {
         // MOVZ/MOVN and 1-3 MOVKs
         int z = 0, m = 0;
-        uint32_t mov1 = 0xd2800000; // movz
+        uint32_t mov1 = ARM64_MOVZ64; // movz
         uint64_t x1 = x;
         for (i = 0; i < 64; i += 16) {
             z += !(x >> i & 0xffff);
@@ -229,7 +229,7 @@ static void arm64_movimm(int r, uint64_t x)
         }
         if (m > z) {
             x1 = ~x;
-            mov1 = 0x92800000; // movn
+            mov1 = ARM64_MOVN64; // movn
         }
         for (i = 0; i < 64; i += 16)
             if (x1 >> i & 0xffff) {
@@ -239,7 +239,7 @@ static void arm64_movimm(int r, uint64_t x)
             }
         for (i += 16; i < 64; i += 16)
             if (x1 >> i & 0xffff)
-                o(0xf2800000 | r | (x >> i & 0xffff) << 5 | i << 17);
+                o(ARM64_MOVK | ARM64_SF(1) | r | (x >> i & 0xffff) << 5 | i << 17);
                 // movk x(r),#(*),lsl #(i)
     }
 }
@@ -254,8 +254,8 @@ ST_FUNC void gsym_addr(int t_, int a_)
         uint32_t next = read32le(ptr);
         if (a - t + 0x8000000 >= 0x10000000)
             tcc_error("branch out of range");
-        write32le(ptr, (a - t == 4 ? 0xd503201f : // nop
-                        0x14000000 | ((a - t) >> 2 & 0x3ffffff))); // b
+        write32le(ptr, (a - t == 4 ? ARM64_NOP :
+                        ARM64_B | ((a - t) >> 2 & 0x3ffffff)));
         t = next;
     }
 }
@@ -290,11 +290,10 @@ static void arm64_spoff(int reg, uint64_t off)
     if (sub)
         off = -off;
     if (off < 4096)
-        o(0x910003e0 | sub << 30 | reg | off << 10);
-        // (add|sub) x(reg),sp,#(off)
+        o(ARM64_ADD_IMM | ARM64_SF(1) | ARM64_RN(31) | ARM64_RD(reg) | ARM64_IMM12(off));
     else {
-        arm64_movimm(30, off); // use x30 for offset
-        o(0x8b3e63e0 | sub << 30 | reg); // (add|sub) x(reg),sp,x30
+        arm64_movimm(30, off);
+        o(ARM64_ADD_REG | ARM64_SF(1) | ARM64_RM(30) | ARM64_RN(31) | ARM64_RD(reg) | (sub << 30));
     }
 }
 
@@ -323,14 +322,14 @@ static void arm64_ldrx(int sg, int sz_, int dst, int bas, uint64_t off)
     if (sz >= 2)
         sg = 0;
     if (!(off & ~scaled_mask))
-        o(0x39400000 | dst | bas << 5 | off << (10 - sz) |
+        o(ARM64_LDR_B | dst | bas << 5 | off << (10 - sz) |
           (uint32_t)!!sg << 23 | sz << 30); // ldr(*) x(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
-        o(0x38400000 | dst | bas << 5 | (off & 511) << 12 |
+        o(ARM64_LDUR_B | dst | bas << 5 | (off & 511) << 12 |
           (uint32_t)!!sg << 23 | sz << 30); // ldur(*) x(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
-        o(0x38206800 | dst | bas << 5 | (uint32_t)30 << 16 |
+        o(ARM64_LDR_B_REG | dst | bas << 5 | (uint32_t)30 << 16 |
           (uint32_t)(!!sg + 1) << 22 | sz << 30); // ldr(*) x(dst),[x(bas),x30]
     }
 }
@@ -341,14 +340,14 @@ static void arm64_ldrv(int sz_, int dst, int bas, uint64_t off)
     uint64_t scaled_mask = 0xffful << sz;
 
     if (!(off & ~scaled_mask))
-        o(0x3d400000 | dst | bas << 5 | off << (10 - sz) |
+        o(ARM64_LDR_SCALAR | dst | bas << 5 | off << (10 - sz) |
           (sz & 4) << 21 | (sz & 3) << 30); // ldr (s|d|q)(dst),[x(bas),#(off)]
     else if (off < 256 || -off <= 256)
-        o(0x3c400000 | dst | bas << 5 | (off & 511) << 12 |
+        o(ARM64_LDUR_Q_SIMD | dst | bas << 5 | (off & 511) << 12 |
           (sz & 4) << 21 | (sz & 3) << 30); // ldur (s|d|q)(dst),[x(bas),#(off)]
     else {
         arm64_movimm(30, off); // use x30 for offset
-        o(0x3c606800 | dst | bas << 5 | (uint32_t)30 << 16 |
+        o(ARM64_LDR_Q_REG | dst | bas << 5 | (uint32_t)30 << 16 |
           sz << 30 | (sz & 4) << 21); // ldr (s|d|q)(dst),[x(bas),x30]
     }
 }
@@ -480,25 +479,27 @@ static void arm64_sym(int r, Sym *sym, unsigned long addend)
     o(ARM64_ADD_IMM | ARM64_SF(1) | ARM64_RN(r) | r); // add xr, xr, #sym
 #else
     greloca(cur_text_section, sym, ind, R_AARCH64_ADR_GOT_PAGE, 0);
-    o(0x90000000 | r);            // adrp xr, #sym
+    o(ARM64_ADRP | r);            // adrp xr, #sym
     greloca(cur_text_section, sym, ind, R_AARCH64_LD64_GOT_LO12_NC, 0);
-    o(0xf9400000 | r | (r << 5)); // ld xr,[xr, #sym]
+    o(ARM64_LDR_X | ARM64_RN(r) | r); // ld xr,[xr, #sym]
 #endif
     if (addend) {
         // add xr, xr, #addend
 	if (addend & 0xffful)
-           o(0x91000000 | r | r << 5 | (addend & 0xfff) << 10);
+           o(ARM64_ADD_IMM | ARM64_SF(1) | ARM64_RN(r) | r |
+             (addend & 0xfff) << 10);
         if (addend > 0xffful) {
             // add xr, xr, #addend, lsl #12
 	    if (addend & 0xfff000ul)
-                o(0x91400000 | r | r << 5 | ((addend >> 12) & 0xfff) << 10);
+                o(ARM64_ADD_IMM | ARM64_SF(1) | ARM64_SH(1) |
+                  ARM64_RN(r) | r | ((addend >> 12) & 0xfff) << 10);
             if (addend > 0xfffffful) {
 		/* very unlikely */
 		int t = r ? 0 : 1;
-		o(0xf81f0fe0 | t);            /* str xt, [sp, #-16]! */
+		o(ARM64_STR_X_PRE | 0x001F0FE0U | t); /* str xt, [sp, #-16]! */
 		arm64_movimm(t, addend & ~0xfffffful); // use xt for addent
-		o(0x8B000000 | (t << 16) | (r << 5) | r); /* add xr, xr, xt */
-		o(0xf84107e0 | t);            /* ldr xt, [sp], #16 */
+		o(ARM64_ADD_REG | ARM64_SF(1) | ARM64_RM(t) | ARM64_RN(r) | r); /* add xr, xr, xt */
+		o(ARM64_LDR_X_POST | 0x000107E0U | t); /* ldr xt, [sp], #16 */
 	    }
         }
     }
@@ -512,7 +513,7 @@ ST_FUNC void load(int r, SValue *sv)
     int svr = sv->r & ~(VT_BOUNDED | VT_NONCONST);
     int svrv = svr & VT_VALMASK;
     uint64_t svcul = sv->c.i;
-    uint64_t svcoff = (int32_t)sv->c.i;
+    uint64_t svcoff = (uint64_t)(int64_t)(int32_t)sv->c.i;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
@@ -553,13 +554,13 @@ ST_FUNC void load(int r, SValue *sv)
 
     if (svr == (VT_CONST | VT_LVAL | VT_SYM)) {
         arm64_sym(30, sv->sym, // use x30 for address
-		  arm64_check_offset(0, arm64_type_size(svtt), svcul));
+		  arm64_check_offset(0, arm64_type_size(svtt), svcoff));
         if (IS_FREG(r))
             arm64_ldrv(arm64_type_size(svtt), fltr(r), 30,
-		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
+		       arm64_check_offset(1, arm64_type_size(svtt), svcoff));
         else
             arm64_ldrx(!(svtt&VT_UNSIGNED), arm64_type_size(svtt), intr(r), 30,
-		       arm64_check_offset(1, arm64_type_size(svtt), svcul));
+		       arm64_check_offset(1, arm64_type_size(svtt), svcoff));
         return;
     }
 
@@ -578,12 +579,12 @@ ST_FUNC void load(int r, SValue *sv)
     if (svr < VT_CONST) {
         if (IS_FREG(r) && IS_FREG(svr))
             if (svtt == VT_LDOUBLE)
-                o(0x4ea01c00 | fltr(r) | fltr(svr) << 5);
+                o(ARM64_MOV_V16B | fltr(r) | fltr(svr) << 5);
                     // mov v(r).16b,v(svr).16b
             else
-                o(0x1e604000 | fltr(r) | fltr(svr) << 5); // fmov d(r),d(svr)
+                o(ARM64_FMOV_SCALAR | fltr(r) | fltr(svr) << 5); // fmov d(r),d(svr)
         else if (!IS_FREG(r) && !IS_FREG(svr))
-            o(0xaa0003e0 | intr(r) | intr(svr) << 16); // mov x(r),x(svr)
+            o(ARM64_MOV_REG | ARM64_SF(1) | intr(r) | intr(svr) << 16); // mov x(r),x(svr)
         else
             assert(0);
       return;
@@ -602,7 +603,7 @@ ST_FUNC void load(int r, SValue *sv)
     if (svr == VT_JMP || svr == VT_JMPI) {
         int t = (svr == VT_JMPI);
         arm64_movimm(intr(r), t);
-        o(0x14000002); // b .+8
+        o(ARM64_B | 2); // b .+8
         gsym(svcul);
         arm64_movimm(intr(r), t ^ 1);
         return;
@@ -623,7 +624,7 @@ ST_FUNC void load(int r, SValue *sv)
         return;
     }
 
-    printf("load(%x, (%x, %x, %llx))\n", r, svtt, sv->r, (long long)svcul);
+    printf("load(%x, (%x, %x, %lx))\n", r, svtt, sv->r, (long)svcul);
     assert(0);
 }
 
@@ -632,7 +633,7 @@ ST_FUNC void store(int r, SValue *sv)
     int svtt = sv->type.t;
     int svr = sv->r & ~VT_BOUNDED;
     int svrv = svr & VT_VALMASK;
-    uint64_t svcoff = (int32_t)sv->c.i;
+    uint64_t svcoff = (uint64_t)(int64_t)(int32_t)sv->c.i;
 
     if (svr == (VT_LOCAL | VT_LVAL)) {
         if (IS_FREG(r))
@@ -679,7 +680,7 @@ ST_FUNC void store(int r, SValue *sv)
         return;
     }
 
-    printf("store(%x, (%x, %x, %llx))\n", r, svtt, sv->r, (long long)svcoff);
+    printf("store(%x, (%x, %x, %lx))\n", r, svtt, sv->r, (long)svcoff);
     assert(0);
 }
 
@@ -688,13 +689,13 @@ static void arm64_gen_bl_or_b(int b)
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && (vtop->r & VT_SYM)) {
 	greloca(cur_text_section, vtop->sym, ind,
                 b ? R_AARCH64_JUMP26 :  R_AARCH64_CALL26, 0);
-	o(0x14000000 | (uint32_t)!b << 31); // b/bl .
+	o(b ? ARM64_B : ARM64_BL); // b/bl .
     }
     else {
 #ifdef CONFIG_TCC_BCHECK
         vtop->r &= ~VT_MUSTBOUND;
 #endif
-        o(0xd61f0000 | (uint32_t)!b << 21 | intr(gv(RC_R30)) << 5); // br/blr
+        o((b ? ARM64_BR : ARM64_BLR) | intr(gv(RC_R30)) << 5); // br/blr
     }
 }
 
@@ -705,7 +706,7 @@ static void gen_bounds_call(int v)
     Sym *sym = external_helper_sym(v);
 
     greloca(cur_text_section, sym, ind, R_AARCH64_CALL26, 0);
-    o(0x94000000); // bl
+    o(ARM64_BL); // bl
 }
 
 static void gen_bounds_prolog(void)
@@ -714,10 +715,10 @@ static void gen_bounds_prolog(void)
     func_bound_offset = lbounds_section->data_offset;
     func_bound_ind = ind;
     func_bound_add_epilog = 0;
-    o(0xd503201f);  /* nop -> mov x0, lbound section pointer */
-    o(0xd503201f);
-    o(0xd503201f);
-    o(0xd503201f);  /* nop -> call __bound_local_new */
+    o(ARM64_NOP);  /* nop -> mov x0, lbound section pointer */
+    o(ARM64_NOP);
+    o(ARM64_NOP);
+    o(ARM64_NOP);  /* nop -> call __bound_local_new */
 }
 
 static void gen_bounds_epilog(void)
@@ -1222,8 +1223,8 @@ ST_FUNC void gfunc_call(int nb_args)
                 for (j = 0; j < n; j++)
                     o(0x3d000100 |
                       (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
-                      (a[i] / 2 - 8 + j) |
-                      j << 10); // str ([sdq])(*),[x8,#(j * sz)]
+                      (fltr(REG_FRET) + j) |
+                      j << 10); // str ([sdq])(j),[x8,#(j * sz)]
             }
         }
     }
@@ -1432,7 +1433,7 @@ ST_FUNC void gen_va_arg(CType *t)
     uint32_t r0, r1;
 
 #ifdef TCC_TARGET_PE
-    int indirect = 0, slot = (size + 7) & -8;
+    int indirect = 0, slot = size + 7 & -8;
 
     if (size > 16)
         indirect = 1, slot = 8;
@@ -1443,7 +1444,7 @@ ST_FUNC void gen_va_arg(CType *t)
     vtop[0].r = r1 | VT_LVAL;
     r1 = intr(r1);
 
-    o(0xF9400000 | r0 << 5 | r1); // ldr x(r1),[x(r0)] // ap
+    o(ARM64_LDR_X | ARM64_RN(r0) | r1); // ldr x(r1),[x(r0)] // ap
     if (slot) {
         if (slot == 16) {
             o(0x910363be); // add x30,x29,#216
@@ -1460,7 +1461,7 @@ ST_FUNC void gen_va_arg(CType *t)
     }
 
     if (indirect)
-        o(0xF9400000 | ARM64_RN(r1) | r1); // ldr x(r1),[x(r1)]
+        o(ARM64_LDR_X | ARM64_RN(r1) | r1); // ldr x(r1),[x(r1)]
 
 #else /* !PE */
     unsigned fsize = size, hfa = 1;
@@ -1476,6 +1477,7 @@ ST_FUNC void gen_va_arg(CType *t)
 
     if (!hfa) {
         uint32_t n = size > 16 ? 8 : (size + 7) & -8;
+
 #if !defined(TCC_TARGET_MACHO)
         o(0xb940181e | r0 << 5); // ldr w30,[x(r0),#24] // __gr_offs
         if (align == 16) {
@@ -1486,21 +1488,24 @@ ST_FUNC void gen_va_arg(CType *t)
         o(0x310003c0 | r1 | n << 10); // adds w(r1),w30,#(n)
         o(0x540000ad); // b.le .+20
 #endif
-        o(0xf9400000 | r1 | r0 << 5); // ldr x(r1),[x(r0)] // __stack
+
+        o(ARM64_LDR_X | ARM64_RN(r0) | r1); // ldr x(r1),[x(r0)] // __stack
         if (align == 16) {
             o(0x91003c00 | r1 | r1 << 5); // add x(r1),x(r1),#15
             o(0x927cec00 | r1 | r1 << 5); // and x(r1),x(r1),#-16
         }
         o(0x9100001e | r1 << 5 | n << 10); // add x30,x(r1),#(n)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
+
 #if !defined(TCC_TARGET_MACHO)
-        o(0x14000004); // b .+16
+        o(ARM64_B | 4); // b .+16
         o(0xb9001800 | r1 | r0 << 5); // str w(r1),[x(r0),#24] // __gr_offs
         o(0xf9400400 | r1 | r0 << 5); // ldr x(r1),[x(r0),#8] // __gr_top
         o(0x8b3ec000 | r1 | r1 << 5); // add x(r1),x(r1),w30,sxtw
 #endif
+
         if (size > 16)
-            o(0xf9400000 | r1 | r1 << 5); // ldr x(r1),[x(r1)]
+            o(ARM64_LDR_X | ARM64_RN(r1) | r1); // ldr x(r1),[x(r1)]
     }
     else {
         uint32_t ssz = (size + 7) & -(uint32_t)8;
@@ -1511,7 +1516,7 @@ ST_FUNC void gen_va_arg(CType *t)
         o(0x310003c0 | r1 | rsz << 10); // adds w(r1),w30,#(rsz)
         b1 = ind; o(0x5400000d); // b.le lab1
 #endif
-        o(0xf9400000 | r1 | r0 << 5); // ldr x(r1),[x(r0)] // __stack
+        o(ARM64_LDR_X | ARM64_RN(r0) | r1); // ldr x(r1),[x(r0)] // __stack
         if (fsize == 16) {
             o(0x91003c00 | r1 | r1 << 5); // add x(r1),x(r1),#15
             o(0x927cec00 | r1 | r1 << 5); // and x(r1),x(r1),#-16
@@ -1519,7 +1524,7 @@ ST_FUNC void gen_va_arg(CType *t)
         o(0x9100001e | r1 << 5 | ssz << 10); // add x30,x(r1),#(ssz)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // __stack
 #if !defined(TCC_TARGET_MACHO)
-        b2 = ind; o(0x14000000); // b lab2
+        b2 = ind; o(ARM64_B); // b lab2
         // lab1:
         write32le(cur_text_section->data + b1, 0x5400000d | (ind - b1) << 3);
         o(0xb9001c00 | r1 | r0 << 5); // str w(r1),[x(r0),#28] // __vr_offs
@@ -1541,7 +1546,7 @@ ST_FUNC void gen_va_arg(CType *t)
               (uint32_t)(hfa != 3) << 21); // st(hfa) {v28.(s|d),...}[0],[x(r1)]
         }
         // lab2:
-        write32le(cur_text_section->data + b2, 0x14000000 | (ind - b2) >> 2);
+        write32le(cur_text_section->data + b2, ARM64_B | ((ind - b2) >> 2));
 #endif
     }
 #endif /* not pe */
@@ -1590,7 +1595,7 @@ ST_FUNC void gfunc_return(CType *func_type)
           for (j = 0; j < n; j++)
               o(0x3d400000 |
                 (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
-                j | j << 10); // ldr ([sdq])(*),[x0,#(j * sz)]
+                (fltr(REG_FRET) + j) | j << 10); // ldr ([sdq])(j),[x0,#(j * sz)]
         }
         else
             gv(RC_FRET);
@@ -1635,7 +1640,7 @@ ST_FUNC void gen_fill_nops(int bytes)
     if ((bytes & 3))
       tcc_error("alignment of code section not multiple of 4");
     while (bytes > 0) {
-	o(0xd503201f); // nop
+	o(ARM64_NOP); // nop
 	bytes -= 4;
     }
 }
@@ -1654,7 +1659,7 @@ ST_FUNC int gjmp(int t)
 ST_FUNC void gjmp_addr(int a)
 {
     assert(a - ind + 0x8000000 < 0x10000000);
-    o(0x14000000 | ((a - ind) >> 2 & 0x3ffffff));
+    o(ARM64_B | (((a - ind) >> 2) & 0x3ffffff));
 }
 
 ST_FUNC int gjmp_append(int n, int t)
@@ -1759,7 +1764,7 @@ static int arm64_gen_opic(int op, uint32_t l, int rev, uint64_t val,
         val = l ? val : (uint32_t)val;
         if (!(val & ~0xffful))
             o(0x11000000 | l << 31 | s << 30 | x | a << 5 | val << 10);
-        else if (!(val & ~(uint64_t)0xfff000))
+        else if (!(val & ~0xfff000ul))
             o(0x11400000 | l << 31 | s << 30 | x | a << 5 | val >> 12 << 10);
         else {
             arm64_movimm(30, val); // use x30
@@ -2199,7 +2204,7 @@ ST_FUNC void gen_increment_tcov (SValue *sv)
     vtop->r = r1 = get_reg(RC_INT);
     r2 = get_reg(RC_INT);
     arm64_sym(r1, sv->sym, 0);
-    o(0xf9400000 | (intr(r1)<<5) | intr(r2)); // ldr r2, [r1]
+    o(ARM64_LDR_X | ARM64_RN(intr(r1)) | intr(r2)); // ldr r2, [r1]
     o(0x91000400 | (intr(r2)<<5) | intr(r2)); // add r2, r2, #1
     o(0xf9000000 | (intr(r1)<<5) | intr(r2)); // str r2, [r1]
     vpop();
@@ -2236,21 +2241,21 @@ ST_FUNC void gen_clear_cache(void)
     o(0x1ac02000 | isz | p << 5 | isz << 16); // lsl w(isz),w(p),w(isz)
     o(0x51000400 | p | dsz << 5); // sub w(p),w(dsz),#1
     o(0x8a240004 | p | beg << 5 | p << 16); // bic x(p),x(beg),x(p)
-    b1 = ind; o(0x14000000); // b
+    b1 = ind; o(ARM64_B); // b
     lab1 = ind;
     o(0xd50b7b20 | p); // dc cvau,x(p)
     o(0x8b000000 | p | p << 5 | dsz << 16); // add x(p),x(p),x(dsz)
-    write32le(cur_text_section->data + b1, 0x14000000 | (ind - b1) >> 2);
+    write32le(cur_text_section->data + b1, ARM64_B | ((ind - b1) >> 2));
     o(0xeb00001f | p << 5 | end << 16); // cmp x(p),x(end)
     o(0x54ffffa3 | ((lab1 - ind) << 3 & 0xffffe0)); // b.cc lab1
     o(0xd5033b9f); // dsb ish
     o(0x51000400 | p | isz << 5); // sub w(p),w(isz),#1
     o(0x8a240004 | p | beg << 5 | p << 16); // bic x(p),x(beg),x(p)
-    b1 = ind; o(0x14000000); // b
+    b1 = ind; o(ARM64_B); // b
     lab1 = ind;
     o(0xd50b7520 | p); // ic ivau,x(p)
     o(0x8b000000 | p | p << 5 | isz << 16); // add x(p),x(p),x(isz)
-    write32le(cur_text_section->data + b1, 0x14000000 | (ind - b1) >> 2);
+    write32le(cur_text_section->data + b1, ARM64_B | ((ind - b1) >> 2));
     o(0xeb00001f | p << 5 | end << 16); // cmp x(p),x(end)
     o(0x54ffffa3 | ((lab1 - ind) << 3 & 0xffffe0)); // b.cc lab1
     o(0xd5033b9f); // dsb ish

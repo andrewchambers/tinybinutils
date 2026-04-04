@@ -131,17 +131,18 @@ ST_FUNC void relocate_plt(TCCState *s1)
         uint64_t off = (got >> 12) - (plt >> 12);
         if ((off + ((uint32_t)1 << 20)) >> 21)
             tcc_error_noabort("Failed relocating PLT (off=0x%lx, got=0x%lx, plt=0x%lx)", (long)off, (long)got, (long)plt);
-        write32le(p, 0xa9bf7bf0); // stp x16,x30,[sp,#-16]!
-        write32le(p + 4, (0x90000010 | // adrp x16,...
+        write32le(p, ARM64_STP_X_PRE | ARM64_RT(16) | ARM64_RT2(30) |
+                      ARM64_RN(31) | ARM64_IMM7(-2)); // stp x16,x30,[sp,#-16]!
+        write32le(p + 4, (ARM64_ADRP | ARM64_RD(16) | // adrp x16,...
 			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
-        write32le(p + 8, (0xf9400211 | // ldr x17,[x16,#...]
+        write32le(p + 8, (ARM64_LDR_X | ARM64_RT(17) | ARM64_RN(16) | // ldr x17,[x16,#...]
 			  (got & 0xff8) << 7));
-        write32le(p + 12, (0x91000210 | // add x16,x16,#...
+        write32le(p + 12, (ARM64_ADD_IMM | ARM64_SF(1) | ARM64_RD(16) | ARM64_RN(16) | // add x16,x16,#...
 			   (got & 0xfff) << 10));
-        write32le(p + 16, 0xd61f0220); // br x17
-        write32le(p + 20, 0xd503201f); // nop
-        write32le(p + 24, 0xd503201f); // nop
-        write32le(p + 28, 0xd503201f); // nop
+        write32le(p + 16, ARM64_BR | ARM64_RN(17)); // br x17
+        write32le(p + 20, ARM64_NOP); // nop
+        write32le(p + 24, ARM64_NOP); // nop
+        write32le(p + 28, ARM64_NOP); // nop
         p += 32;
 	got = s1->got->sh_addr;
         while (p < p_end) {
@@ -150,13 +151,13 @@ ST_FUNC void relocate_plt(TCCState *s1)
             uint64_t off = (addr >> 12) - (pc >> 12);
             if ((off + ((uint32_t)1 << 20)) >> 21)
                 tcc_error_noabort("Failed relocating PLT (off=0x%lx, addr=0x%lx, pc=0x%lx)", (long)off, (long)addr, (long)pc);
-            write32le(p, (0x90000010 | // adrp x16,...
+            write32le(p, (ARM64_ADRP | ARM64_RD(16) | // adrp x16,...
 			  (off & 0x1ffffc) << 3 | (off & 3) << 29));
-            write32le(p + 4, (0xf9400211 | // ldr x17,[x16,#...]
+            write32le(p + 4, (ARM64_LDR_X | ARM64_RT(17) | ARM64_RN(16) | // ldr x17,[x16,#...]
 			      (addr & 0xff8) << 7));
-            write32le(p + 8, (0x91000210 | // add x16,x16,#...
+            write32le(p + 8, (ARM64_ADD_IMM | ARM64_SF(1) | ARM64_RD(16) | ARM64_RN(16) | // add x16,x16,#...
 			      (addr & 0xfff) << 10));
-            write32le(p + 12, 0xd61f0220); // br x17
+            write32le(p + 12, ARM64_BR | ARM64_RN(17)); // br x17
             p += 16;
         }
     }
