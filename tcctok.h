@@ -421,8 +421,12 @@
 #include "i386-tok.h"
 #endif
 
-#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
+#if defined TCC_TARGET_ARM
 #include "arm-tok.h"
+#endif
+
+#if defined TCC_TARGET_ARM64
+#include "arm64-tok.h"
 #endif
 
 #if defined TCC_TARGET_RISCV64
