@@ -949,9 +949,10 @@ struct TCCState {
     unsigned pe_file_align;
     unsigned pe_stack_size;
     addr_t pe_imagebase;
-# ifdef TCC_TARGET_X86_64
+# if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
     Section *uw_pdata;
     int uw_sym;
+    int uw_xsym;
     unsigned uw_offs;
 # endif
 #endif
@@ -1762,7 +1763,7 @@ ST_FUNC int pe_putimport(TCCState *s1, int dllindex, const char *name, addr_t va
 ST_FUNC int pe_setsubsy(TCCState *s1, const char *arg);
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 #endif
-#ifdef TCC_TARGET_X86_64
+#if defined(TCC_TARGET_X86_64) || defined(TCC_TARGET_ARM64)
 ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack);
 #endif
 PUB_FUNC int tcc_get_dllexports(const char *filename, char **pp);

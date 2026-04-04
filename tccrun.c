@@ -1199,7 +1199,11 @@ static int rt_error(rt_frame *f, const char *fmt, ...)
 /* translate from ucontext_t* to internal rt_context * */
 static void rt_getcontext(ucontext_t *uc, rt_frame *rc)
 {
-#if defined _WIN64
+#if defined _WIN64 && defined __aarch64__
+    rc->ip = uc->Pc;      /* Program Counter */
+    rc->fp = uc->Fp;      /* Frame Pointer (X29) */
+    rc->sp = uc->Sp;      /* Stack Pointer (X30 is LR, but SP is separate) */
+#elif defined _WIN64
     rc->ip = uc->Rip;
     rc->fp = uc->Rbp;
     rc->sp = uc->Rsp;
@@ -1398,7 +1402,11 @@ static long __stdcall cpu_exception_handler(EXCEPTION_POINTERS *ex_info)
 /* Generate a stack backtrace when a CPU exception occurs. */
 static void set_exception_handler(void)
 {
+#ifdef _WIN64
+    AddVectoredExceptionHandler(1, cpu_exception_handler);
+#else
     SetUnhandledExceptionFilter(cpu_exception_handler);
+#endif
 }
 
 #endif
