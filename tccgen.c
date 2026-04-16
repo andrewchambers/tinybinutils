@@ -8718,10 +8718,6 @@ static int decl(int l)
                 return 1;
             next();
             continue;
-        } else if (l != VT_JMP && l != VT_CMP) {
-            /* no semicolon - let caller handle it */
-        } else {
-            expect(";");
         }
 
         while (1) { /* iterate thru each declaration */
@@ -8908,7 +8904,10 @@ static int decl(int l)
                 if (tok != ',') {
                     if (l == VT_JMP)
                         return has_init ? v : 1;
-                    if (tok == ';') next();
+                    if (l == VT_CMP)
+                        skip(';');
+                    else if (tok == ';')
+                        next();
                     break;
                 }
                 next();
