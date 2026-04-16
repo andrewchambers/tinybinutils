@@ -38,3 +38,17 @@
 - Some tests need special flags (see `FLAGS =` assignments in `tests/tests2/Makefile`).
 - Bound-check tests (`-b` flag) are skipped when `CONFIG_bcheck=no`.
 - `.expect` files are generated with gcc by default; some use TCC (flagged with `GEN-TCC`).
+
+## Language Extension: Optional Semicolons
+
+Semicolons are optional after most statements and declarations:
+- `return`, `break`, `continue`, `goto`, expression statements
+- `do-while` trailing semicolon
+- Variable declarations
+
+Semicolons are still **required** for:
+- `for()` loop init/condition/increment sections (e.g., `for(i=0; i<n; i++)`)
+- Old-style function parameter declarations
+- Struct/enum member declarations
+
+The `skip(';')` function in `tccpp.c:100` errors if token doesn't match. Use `if (tok == ';') next();` instead to make semicolons optional.
