@@ -13,6 +13,7 @@ TESTS = \
  hello-run \
  libtest \
  libtest_mt \
+ libtest_xor_rex \
  test3 \
  abitest \
  asm-c-connect-test \
@@ -39,6 +40,9 @@ ifeq (-$(CONFIG_arm_eabi)-$(CONFIG_arm_vfp)-,-yes--)
 endif
 ifeq (,$(filter i386 x86_64,$(ARCH)))
  TESTS := $(filter-out asm-c-connect-test,$(TESTS))
+endif
+ifeq (,$(filter x86_64,$(ARCH)))
+ TESTS := $(filter-out libtest_xor_rex,$(TESTS))
 endif
 ifeq ($(OS),Windows_NT) # for libtcc_test to find libtcc.dll
  PATH := $(CURDIR)/$(TOP)$(if $(findstring ;,$(PATH)),;,:)$(PATH)
@@ -101,6 +105,9 @@ libtcc_test$(EXESUF): libtcc_test.c
 	$(CC) -o $@ $< $(CFLAGS) $(-LTCC) $(LIBS)
 
 libtcc_test_mt$(EXESUF): libtcc_test_mt.c
+	$(CC) -o $@ $< $(CFLAGS) $(-LTCC) $(LIBS)
+
+libtcc_test_xor_rex$(EXESUF): libtcc_test_xor_rex.c
 	$(CC) -o $@ $< $(CFLAGS) $(-LTCC) $(LIBS)
 
 %-dir:
