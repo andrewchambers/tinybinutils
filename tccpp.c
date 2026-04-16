@@ -2500,12 +2500,13 @@ static void parse_number(const char *p)
             if (t >= b)
                 tcc_error("invalid digit");
             n = n * b + t;
-            if (!ov)
+            if (!ov) {
                 /* detect overflow */
                 if (n1 >= 0x1000000000000000ULL && n / b != n1)
                     ov = 1;
                 else
                     n1 = n;
+	    }
         }
 
         /* Determine the characteristics (unsigned and/or 64bit) the type of
