@@ -495,7 +495,8 @@ void load(int r, SValue *sv)
                     orex(0,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
                     gen_le32(sv->c.i);
                 } else {
-                    o(0xc031 + REG_VALUE(r) * 0x900); /* xor r, r */
+                    orex(0, r, r, 0x31); /* xor r, r */
+                    o(0xc0 + REG_VALUE(r) * 9);
                 }
             } else {
                 orex(0,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
