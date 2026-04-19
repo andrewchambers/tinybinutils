@@ -179,7 +179,7 @@ bar  : 3 ; 3
 60_errors_and_warnings.c:372: error: statement expression outside of function
 
 [test_invalid_tokckill]
-60_errors_and_warnings.c:375: warning: function might return no value: 'f'
+60_errors_and_warnings.c:375: error: ';' expected (got '3')
 
 [test_duplicate_member]
 60_errors_and_warnings.c:381: error: duplicate member 'a'

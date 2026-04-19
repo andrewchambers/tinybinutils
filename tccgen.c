@@ -7205,7 +7205,7 @@ again:
                 label_push(&local_label_stack, tok, LABEL_DECLARED);
                 next();
             } while (tok == ',');
-            if (tok == ';') next();
+            skip(';');
         }
 
         while (tok != '}') {
@@ -7241,7 +7241,7 @@ again:
         leave_scope(root_scope);
         if (b)
             gfunc_return(&func_vt);
-        if (tok == ';') next();
+        skip(';');
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
             rsym = gjmp(rsym);
@@ -7258,7 +7258,7 @@ again:
         else
             leave_scope(loop_scope);
         *cur_scope->bsym = gjmp(*cur_scope->bsym);
-        if (tok == ';') next();
+        skip(';');
 
     } else if (t == TOK_CONTINUE) {
         /* compute jump */
@@ -7266,7 +7266,7 @@ again:
             tcc_error("cannot continue");
         leave_scope(loop_scope);
         *cur_scope->csym = gjmp(*cur_scope->csym);
-        if (tok == ';') next();
+        skip(';');
 
     } else if (t == TOK_FOR) {
         new_scope(&o);
@@ -7314,7 +7314,7 @@ again:
 	gexpr();
         c = gvtst(0, 0);
         skip(')');
-        if (tok == ';') next();
+        skip(';');
 	gsym_addr(c, d);
         gsym(a);
         prev_scope_s(&o);
@@ -7426,7 +7426,7 @@ again:
         } else {
             expect("label identifier");
         }
-        if (tok == ';') next();
+        skip(';');
 
     } else if (t == TOK_ASM1 || t == TOK_ASM2 || t == TOK_ASM3) {
         asm_instr();
@@ -7481,7 +7481,7 @@ again:
                     gexpr();
                     vpop();
                 }
-                if (tok == ';') next();
+                skip(';');
             }
         }
     }
@@ -8637,7 +8637,7 @@ static void do_Static_assert(void)
     skip(')');
     if (c == 0)
         tcc_error("%s", msg);
-    if (tok == ';') next();
+    skip(';');
 }
 
 #ifdef TCC_TARGET_PE
@@ -8904,10 +8904,7 @@ static int decl(int l)
                 if (tok != ',') {
                     if (l == VT_JMP)
                         return has_init ? v : 1;
-                    if (l == VT_CMP)
-                        skip(';');
-                    else if (tok == ';')
-                        next();
+                    skip(';');
                     break;
                 }
                 next();
