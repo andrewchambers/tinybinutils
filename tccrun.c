@@ -260,22 +260,56 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 }
 
 /* ------------------------------------------------------------- */
-/* remove all STB_LOCAL symbols */
+/* remove all STB_LOCAL symbols. When do_debug is set, cleanup_sections()
+   keeps the relocation sections alive for a later elf_output_obj() call;
+   the r_info indices in those rela entries refer to the pre-cleanup
+   symbol numbering, so we must build an old->new map and rewrite them.
+   Without that, sort_syms() in elf_output_obj() allocates an
+   old_to_new_syms[] array sized for the post-cleanup (smaller) symtab
+   and indexes it with the stale (larger) sym_index values, reading off
+   the end of the array. */
 static void cleanup_symbols(TCCState *s1)
 {
     Section *s = s1->symtab;
     int sym_index, end_sym = s->data_offset / sizeof (ElfSym);
+    int *old_to_new = s1->do_debug
+        ? tcc_mallocz(end_sym * sizeof(int))
+        : NULL;
     /* reset symtab */
     s->data_offset = s->link->data_offset = s->hash->data_offset = 0;
     init_symtab(s);
-    /* add global symbols again */
+    /* add global symbols again, recording the new index of each */
     for (sym_index = 1; sym_index < end_sym; ++sym_index) {
         ElfW(Sym) *sym = &((ElfW(Sym) *)s->data)[sym_index];
         const char *name = (char *)s->link->data + sym->st_name;
+        int new_idx;
         if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
             continue;
         //printf("sym %s\n", name);
-        put_elf_sym(s, sym->st_value, sym->st_size, sym->st_info, sym->st_other, sym->st_shndx, name);
+        new_idx = put_elf_sym(s, sym->st_value, sym->st_size,
+            sym->st_info, sym->st_other, sym->st_shndx, name);
+        if (old_to_new)
+            old_to_new[sym_index] = new_idx;
+    }
+    if (old_to_new) {
+        int i;
+        for (i = 1; i < s1->nb_sections; i++) {
+            Section *sr = s1->sections[i];
+            ElfW_Rel *rel;
+            if (sr->sh_type != SHT_RELX || sr->link != s)
+                continue;
+            for_each_elem(sr, 0, rel, ElfW_Rel) {
+                int old = ELFW(R_SYM)(rel->r_info);
+                int type = ELFW(R_TYPE)(rel->r_info);
+                /* Locals (and the undef sym at 0) map to 0 by
+                   tcc_mallocz; relocations against dropped locals now
+                   refer to SHN_UNDEF, which is the best we can do
+                   without preserving the locals themselves. */
+                int new_idx = (old > 0 && old < end_sym) ? old_to_new[old] : 0;
+                rel->r_info = ELFW(R_INFO)(new_idx, type);
+            }
+        }
+        tcc_free(old_to_new);
     }
 }
 
