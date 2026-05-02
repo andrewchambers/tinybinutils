@@ -1245,6 +1245,27 @@ ST_FUNC void gen_opf(int op)
     }
 }
 
+ST_FUNC void gen_cvt_csti(int t)
+{
+    int r = ireg(gv(RC_INT));
+    if ((t & VT_BTYPE) == VT_SHORT) {
+        if (t & VT_UNSIGNED) {
+            EI(0x13, 1, r, r, 48); // slli r, r, 48
+            EI(0x13, 5, r, r, 48); // srli r, r, 48
+        } else {
+            EI(0x13, 1, r, r, 48); // slli r, r, 48
+            EIu(0x13, 5, r, r, 0x400 | 48); // srai r, r, 48
+        }
+    } else {
+        if (t & VT_UNSIGNED) {
+            EI(0x13, 7, r, r, 0xff); // andi r, r, 0xff
+        } else {
+            EI(0x13, 1, r, r, 56); // slli r, r, 56
+            EIu(0x13, 5, r, r, 0x400 | 56); // srai r, r, 56
+        }
+    }
+}
+
 ST_FUNC void gen_cvt_sxtw(void)
 {
     /* XXX on risc-v the registers are usually sign-extended already.

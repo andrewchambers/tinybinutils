@@ -3471,11 +3471,11 @@ error:
 
         if (ds >= ss)
             goto done;
-#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM64
-        if (ss == 4) {
-            gen_cvt_csti(dbt);
-            goto done;
-        }
+#if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64 || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+    if (ss == 4) {
+        gen_cvt_csti(dbt);
+        goto done;
+    }
 #endif
         bits = (ss - ds) * 8;
         /* for unsigned, gen_op will convert SAR to SHR */
