@@ -393,6 +393,11 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
     case R_RISCV_COPY:
         /* XXX */
         return;
+    case R_RISCV_RELATIVE:
+        /* R_RISCV_RELATIVE value is already applied in R_RISCV_32/64
+           dynamic output paths, but we need this case for incoming
+           RELATIVE relocations from object files. */
+        return;
 
     default:
         fprintf(stderr, "FIXME: handle reloc type %x at %x [%p] to %x\n",
