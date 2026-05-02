@@ -683,6 +683,26 @@ static void asm_binary_opcode(TCCState* s1, int token)
         /* subw rd, x0, rs2 */
         asm_emit_r(token, (0xE << 2) | 3 | (32 << 25), &ops[0], &zero, &ops[1]);
         return;
+    case TOK_ASM_sext_w:
+        /* addiw rd, rs, 0 */
+        asm_emit_i(token, 0x1b, &ops[0], &ops[1], &zimm);
+        return;
+    case TOK_ASM_fneg_s:
+        /* fsgnjn.s rd, rs, rs */
+        asm_emit_f(token, 0x53 | (1 << 12) | (0 << 25) | (4 << 27), &ops[0], &ops[1], &ops[1]);
+        return;
+    case TOK_ASM_fneg_d:
+        /* fsgnjn.d rd, rs, rs */
+        asm_emit_f(token, 0x53 | (1 << 12) | (1 << 25) | (4 << 27), &ops[0], &ops[1], &ops[1]);
+        return;
+    case TOK_ASM_fmv_s:
+        /* fsgnj.s rd, rs, rs */
+        asm_emit_f(token, 0x53 | (0 << 12) | (0 << 25) | (4 << 27), &ops[0], &ops[1], &ops[1]);
+        return;
+    case TOK_ASM_fmv_d:
+        /* fsgnj.d rd, rs, rs */
+        asm_emit_f(token, 0x53 | (0 << 12) | (1 << 25) | (4 << 27), &ops[0], &ops[1], &ops[1]);
+        return;
     case TOK_ASM_jump:
         /* auipc x5, 0 */
         asm_emit_opcode(3 | (5 << 2) | ENCODE_RD(5));
@@ -1634,8 +1654,13 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_not:
     case TOK_ASM_neg:
     case TOK_ASM_negw:
+    case TOK_ASM_sext_w:
     case TOK_ASM_fabs_s:
     case TOK_ASM_fabs_d:
+    case TOK_ASM_fmv_s:
+    case TOK_ASM_fmv_d:
+    case TOK_ASM_fneg_s:
+    case TOK_ASM_fneg_d:
     case TOK_ASM_csrc:
     case TOK_ASM_csrs:
     case TOK_ASM_fsrm:
