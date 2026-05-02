@@ -30,6 +30,10 @@
 
 #define CHAR_IS_UNSIGNED
 
+/* define if return values need to be extended explicitely
+   at caller side (for interfacing with non-TCC compilers) */
+#define PROMOTE_RET
+
 #else
 #define USING_GLOBALS
 #include "tcc.h"
