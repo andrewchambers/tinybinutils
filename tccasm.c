@@ -1014,17 +1014,41 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_reloc:
 	{
 	    ExprValue e;
+	    const char *reloc_name;
+	    int reloc_type = -1;
 
 	    next();
 	    asm_expr(s1, &e);
 	    skip(',');
+	    reloc_name = get_tok_str(tok, NULL);
 #if defined(TCC_TARGET_ARM64)
-	    if (strcmp(get_tok_str(tok, NULL), "R_AARCH64_CALL26"))
+	    if (!strcmp(reloc_name, "R_AARCH64_CALL26"))
+	        reloc_type = R_AARCH64_CALL26;
+#elif defined(TCC_TARGET_RISCV64)
+	    if (!strcmp(reloc_name, "R_RISCV_CALL") || !strcmp(reloc_name, "R_RISCV_CALL_PLT"))
+	        reloc_type = R_RISCV_CALL;
+	    else if (!strcmp(reloc_name, "R_RISCV_BRANCH"))
+	        reloc_type = R_RISCV_BRANCH;
+	    else if (!strcmp(reloc_name, "R_RISCV_JAL"))
+	        reloc_type = R_RISCV_JAL;
+	    else if (!strcmp(reloc_name, "R_RISCV_PCREL_HI20"))
+	        reloc_type = R_RISCV_PCREL_HI20;
+	    else if (!strcmp(reloc_name, "R_RISCV_PCREL_LO12_I"))
+	        reloc_type = R_RISCV_PCREL_LO12_I;
+	    else if (!strcmp(reloc_name, "R_RISCV_PCREL_LO12_S"))
+	        reloc_type = R_RISCV_PCREL_LO12_S;
+	    else if (!strcmp(reloc_name, "R_RISCV_32_PCREL"))
+	        reloc_type = R_RISCV_32_PCREL;
+	    else if (!strcmp(reloc_name, "R_RISCV_32"))
+	        reloc_type = R_RISCV_32;
+	    else if (!strcmp(reloc_name, "R_RISCV_64"))
+	        reloc_type = R_RISCV_64;
 #endif
-	        tcc_error("unimp: reloc '%s' unknown", get_tok_str(tok, NULL));
+	    if (reloc_type < 0)
+	        tcc_error("unimp: reloc '%s' unknown", reloc_name);
 	    next();
 	    skip(',');
-	    greloca(cur_text_section, get_asm_sym(tok, NULL), e.v, R_AARCH64_CALL26, 0);
+	    greloca(cur_text_section, get_asm_sym(tok, NULL), e.v, reloc_type, 0);
 	    next();
 	}
 	break;
