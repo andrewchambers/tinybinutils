@@ -247,11 +247,9 @@ static void parse_branch_offset_operand(TCCState *s1, Operand *op){
         if ((int) op->e.v >= -0x1000 && (int) op->e.v < 0x1000)
             op->type = OP_IM12S;
     } else if (op->e.sym->type.t & (VT_EXTERN | VT_STATIC)) {
-        greloca(cur_text_section, op->e.sym, ind, R_RISCV_BRANCH, 0);
-
-        /* XXX: Implement far branches */
-
-        op->type = OP_IM12S;
+        /* For extern/static symbols, always use far-branch expansion
+           since linker relaxation (R_RISCV_RELAX) is not implemented. */
+        op->type = OP_IM32;
         op->e.v = 0;
     } else {
         expect("operand");
@@ -1383,6 +1381,26 @@ static void asm_emit_b(int token, uint32_t opcode, const Operand *rs1, const Ope
     }
     if (rs2->type != OP_REG) {
         tcc_error("'%s': Expected destination operand that is a register", get_tok_str(token, NULL));
+    }
+    if (imm->type == OP_IM32 && imm->e.sym) {
+        /* far branch: expand to inverted short branch + auipc + jalr */
+        int b_ofs = ind;
+        uint32_t inv_func3 = ((opcode >> 12) & 7) ^ 1;
+        uint32_t inv_opcode = (opcode & ~(7 << 12)) | (inv_func3 << 12);
+        /* b<inverse> .+8 */
+        asm_emit_opcode(inv_opcode | ENCODE_RS1(rs1->reg)
+                        | ENCODE_RS2(rs2->reg) | (1 << 8));
+        /* auipc t0, 0 */
+        greloca(cur_text_section, imm->e.sym, ind, R_RISCV_CALL, 0);
+        asm_emit_opcode(0x17 | ENCODE_RD(5));
+        /* jalr x0, 0(t0) */
+        write32le(cur_text_section->data + b_ofs,
+                  read32le(cur_text_section->data + b_ofs)
+                  | (((ind - b_ofs) >> 1) & 0xf) << 8
+                  | (((ind - b_ofs) >> 5) & 0x3f) << 25
+                  | (((ind - b_ofs) >> 11) & 1) << 7
+                  | (((ind - b_ofs) >> 12) & 1) << 31);
+        return;
     }
     if (imm->type != OP_IM12S) {
         tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 8191", get_tok_str(token, NULL));
