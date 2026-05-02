@@ -1268,8 +1268,8 @@ ST_FUNC void gen_cvt_csti(int t)
 
 ST_FUNC void gen_cvt_sxtw(void)
 {
-    /* XXX on risc-v the registers are usually sign-extended already.
-       Let's try to not do anything here.  */
+    int r = ireg(gv(RC_INT));
+    EI(0x1b, 0, r, r, 0); // addiw r, r, 0
 }
 
 ST_FUNC void gen_cvt_itof(int t)
