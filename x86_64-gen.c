@@ -1840,6 +1840,7 @@ void gen_opf(int op)
             o(0x80); /* xor $0x80, $n(rbp) */
             gen_modrm(6, vtop->r, NULL, vtop->c.i + (bt == VT_DOUBLE ? 7 : 3));
             o(0x80);
+            gv(float_type); /* -n is not a lvalue */
         }
         return;
     }

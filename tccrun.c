@@ -260,56 +260,22 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
 }
 
 /* ------------------------------------------------------------- */
-/* remove all STB_LOCAL symbols. When do_debug is set, cleanup_sections()
-   keeps the relocation sections alive for a later elf_output_obj() call;
-   the r_info indices in those rela entries refer to the pre-cleanup
-   symbol numbering, so we must build an old->new map and rewrite them.
-   Without that, sort_syms() in elf_output_obj() allocates an
-   old_to_new_syms[] array sized for the post-cleanup (smaller) symtab
-   and indexes it with the stale (larger) sym_index values, reading off
-   the end of the array. */
+/* remove all STB_LOCAL symbols */
 static void cleanup_symbols(TCCState *s1)
 {
     Section *s = s1->symtab;
     int sym_index, end_sym = s->data_offset / sizeof (ElfSym);
-    int *old_to_new = s1->do_debug
-        ? tcc_mallocz(end_sym * sizeof(int))
-        : NULL;
     /* reset symtab */
     s->data_offset = s->link->data_offset = s->hash->data_offset = 0;
     init_symtab(s);
-    /* add global symbols again, recording the new index of each */
+    /* add global symbols again */
     for (sym_index = 1; sym_index < end_sym; ++sym_index) {
         ElfW(Sym) *sym = &((ElfW(Sym) *)s->data)[sym_index];
         const char *name = (char *)s->link->data + sym->st_name;
-        int new_idx;
         if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
             continue;
         //printf("sym %s\n", name);
-        new_idx = put_elf_sym(s, sym->st_value, sym->st_size,
-            sym->st_info, sym->st_other, sym->st_shndx, name);
-        if (old_to_new)
-            old_to_new[sym_index] = new_idx;
-    }
-    if (old_to_new) {
-        int i;
-        for (i = 1; i < s1->nb_sections; i++) {
-            Section *sr = s1->sections[i];
-            ElfW_Rel *rel;
-            if (sr->sh_type != SHT_RELX || sr->link != s)
-                continue;
-            for_each_elem(sr, 0, rel, ElfW_Rel) {
-                int old = ELFW(R_SYM)(rel->r_info);
-                int type = ELFW(R_TYPE)(rel->r_info);
-                /* Locals (and the undef sym at 0) map to 0 by
-                   tcc_mallocz; relocations against dropped locals now
-                   refer to SHN_UNDEF, which is the best we can do
-                   without preserving the locals themselves. */
-                int new_idx = (old > 0 && old < end_sym) ? old_to_new[old] : 0;
-                rel->r_info = ELFW(R_INFO)(new_idx, type);
-            }
-        }
-        tcc_free(old_to_new);
+        put_elf_sym(s, sym->st_value, sym->st_size, sym->st_info, sym->st_other, sym->st_shndx, name);
     }
 }
 
@@ -321,7 +287,7 @@ static void cleanup_sections(TCCState *s1)
     do {
         for (i = --f; i < p->nb_secs; i++) {
             Section *s = p->secs[i];
-            if (s1->do_debug || s == s1->symtab || s == s1->symtab->link || s == s1->symtab->hash) {
+            if (s == s1->symtab || s == s1->symtab->link || s == s1->symtab->hash) {
                 s->data = tcc_realloc(s->data, s->data_allocated = s->data_offset);
             } else {
                 free_section(s), tcc_free(s), p->secs[i] = NULL;
@@ -333,11 +299,10 @@ static void cleanup_sections(TCCState *s1)
 /* ------------------------------------------------------------- */
 /* 0 = .text rwx  other rw (memory >= 2 pages a 4096 bytes) */
 /* 1 = .text rx   other rw (memory >= 3 pages) */
-/* 2 = .debug    .debug ro (optional) */
-/* 3 = .text rx  .rdata ro  .data/.bss rw (memory >= 4 pages) */
+/* 2 = .text rx  .rdata ro  .data/.bss rw (memory >= 4 pages) */
 
 /* Some targets implement secutiry options that do not allow write in
-   executable code. These targets need CONFIG_RUNMEM_RO=2.
+   executable code. These targets need CONFIG_RUNMEM_RO=1.
    The disadvantage of this is that it requires a little bit more memory. */
 
 #ifndef CONFIG_RUNMEM_RO
@@ -378,13 +343,12 @@ redo:
     if (copy == 3)
         return 0;
 
-    for (k = 0; k < 4; ++k) { /* 0:rx, 1:ro, 2:ro debug , 3:rw sections */
+    for (k = 0; k < 3; ++k) { /* 0:rx, 1:ro, 2:rw sections */
         n = 0; addr = 0;
         for(i = 1; i < s1->nb_sections; i++) {
             static const char shf[] = {
-                SHF_ALLOC|SHF_EXECINSTR, SHF_ALLOC, 0, SHF_ALLOC|SHF_WRITE
+                SHF_ALLOC|SHF_EXECINSTR, SHF_ALLOC, SHF_ALLOC|SHF_WRITE
                 };
-	    if (k == 2 && s1->do_debug == 0) continue;
             s = s1->sections[i];
             if (shf[k] != (s->sh_flags & (SHF_ALLOC|SHF_WRITE|SHF_EXECINSTR)))
                 continue;

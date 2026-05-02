@@ -2475,7 +2475,7 @@ static void parse_number(const char *p)
             }
         }
     } else {
-        unsigned long long n = 0, n1 = 0;
+        unsigned long long n, n1;
         int lcount, ucount, ov = 0;
         const char *p1;
 
@@ -2486,6 +2486,7 @@ static void parse_number(const char *p)
             b = 8;
             q++;
         }
+        n = 0;
         while(1) {
             t = *q++;
             /* no need for checks except for base 10 / 8 errors */
@@ -2499,14 +2500,11 @@ static void parse_number(const char *p)
                 t = t - '0';
             if (t >= b)
                 tcc_error("invalid digit");
+            n1 = n;
             n = n * b + t;
-            if (!ov) {
-                /* detect overflow */
-                if (n1 >= 0x1000000000000000ULL && n / b != n1)
-                    ov = 1;
-                else
-                    n1 = n;
-	    }
+            /* detect overflow */
+            if (n1 >= 0x1000000000000000ULL && n / b != n1)
+                ov = 1;
         }
 
         /* Determine the characteristics (unsigned and/or 64bit) the type of
@@ -2556,26 +2554,7 @@ static void parse_number(const char *p)
         }
 
         if (ov)
-            /* Give a warning with values in case of an overflow. This helps to
-               spot the 0 too much in 0x8000'0000'0000'0000'0. It may even be
-               better to use a 0x8000'0000'0000'0000 from n1 instead of a 0 from
-               n after the overflow. This is at least undefined behavior.
-               The C99 to C23 standards state:
-               "Each constant shall have a type and the value of a constant
-               shall be in the range of representable values for its type."
-               "If an integer constant cannot be represented by any type ...,
-               then the integer constant has no type."
-               The C++ standards state:
-               "A program is ill-formed if one of its translation units contains
-               an integer-literal that cannot be represented by any of the
-               allowed types." */
-            tcc_warning(
-                b == 8
-                ? "integer constant overflow, using %#llo; did you mean %#llo?"
-                : b == 10
-                ? "integer constant overflow, using %llu, did you mean %llu?"
-                : "integer constant overflow, using %#llx; did you mean %#llx?",
-                n, n1);
+            tcc_warning("integer constant overflow");
 
         tok = TOK_CINT;
 	if (lcount) {

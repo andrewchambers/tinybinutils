@@ -1848,39 +1848,26 @@ ST_FUNC void gen_opl(int op)
 ST_FUNC void gen_opf(int op)
 {
     uint32_t x, a, b, dbl;
+    int bt = vtop[0].type.t & VT_BTYPE;
 
     if (op == TOK_NEG) {
-        switch (vtop[0].type.t & VT_BTYPE) {
-        case VT_LDOUBLE:
+        if (bt == VT_LDOUBLE) {
             vpush_helper_func(TOK___negtf2);
             vrott(2);
             gfunc_call(1);
             vpushi(0);
-            vtop->type.t = VT_LDOUBLE;
+            vtop->type.t = bt;
             vtop->r = REG_FRET;
-            break;
-
-        case VT_FLOAT:
-        case VT_DOUBLE:
+        } else {
             gv(RC_FLOAT);
-            dbl = (vtop[0].type.t & VT_BTYPE) == VT_DOUBLE;
-
+            dbl = bt == VT_DOUBLE;
             a = fltr(vtop[0].r);
-            vtop--;
-            x = get_reg(RC_FLOAT);
-            vtop++;
-            vtop[0].r = x;
-            x = fltr(x);
-
-            o(0x1e214000 | dbl << 22 | x | a << 5);
-            break;
-        default:
-            assert(0);
+            o(0x1e214000 | dbl << 22 | a | a << 5);
         }
         return;
     }
 
-    if (vtop[0].type.t == VT_LDOUBLE) {
+    if (bt == VT_LDOUBLE) {
         CType type = vtop[0].type;
         int func = 0;
         int cond = -1;
@@ -1912,7 +1899,7 @@ ST_FUNC void gen_opf(int op)
         return;
     }
 
-    dbl = vtop[0].type.t != VT_FLOAT;
+    dbl = bt != VT_FLOAT;
     gv2(RC_FLOAT, RC_FLOAT);
     assert(vtop[-1].r < VT_CONST && vtop[0].r < VT_CONST);
     a = fltr(vtop[-1].r);
@@ -2075,12 +2062,7 @@ ST_FUNC void gen_cvt_ftof(int t)
         gv(RC_FLOAT);
         assert(vtop[0].r < VT_CONST);
         a = fltr(vtop[0].r);
-        --vtop;
-        x = get_reg(RC_FLOAT);
-        ++vtop;
-        vtop[0].r = x;
-        x = fltr(x);
-
+        x = a;
         if (f == VT_FLOAT)
             o(0x1e22c000 | x | a << 5); // fcvt d(x),s(a)
         else

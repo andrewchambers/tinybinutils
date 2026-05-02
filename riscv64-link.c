@@ -175,37 +175,23 @@ ST_FUNC void relocate_plt(TCCState *s1)
 
 static void riscv64_record_pcrel_hi(TCCState *s1, addr_t addr, addr_t val)
 {
-    int n = s1->nb_pcrel_hi_entries;
-    if (n >= s1->alloc_pcrel_hi_entries) {
-        int new_alloc = s1->alloc_pcrel_hi_entries ? s1->alloc_pcrel_hi_entries * 2 : 64;
-        s1->pcrel_hi_entries = tcc_realloc(s1->pcrel_hi_entries,
-            new_alloc * sizeof(*s1->pcrel_hi_entries));
-        s1->alloc_pcrel_hi_entries = new_alloc;
-    }
-    s1->pcrel_hi_entries[n].addr = addr;
-    s1->pcrel_hi_entries[n].val = val;
-    s1->nb_pcrel_hi_entries = n + 1;
-    last_hi.addr = addr;
-    last_hi.val = val;
+    struct pcrel_hi *entry = tcc_malloc(sizeof *entry);
+    entry->addr = addr;
+    entry->val = val;
+    dynarray_add(&s1->pcrel_hi_entries, &s1->nb_pcrel_hi_entries, entry);
 }
 
 static int riscv64_lookup_pcrel_hi(TCCState *s1, addr_t hi_addr, addr_t *hi_val)
 {
     int i;
-    struct pcrel_hi *entry;
-    if (s1->nb_pcrel_hi_entries && hi_addr == last_hi.addr) {
-        *hi_val = last_hi.val;
-        return 1;
-    }
-    for (i = s1->nb_pcrel_hi_entries - 1; i >= 0; --i) {
-        entry = &s1->pcrel_hi_entries[i];
+    for (i = s1->nb_pcrel_hi_entries; i > 0; ) {
+        struct pcrel_hi *entry = s1->pcrel_hi_entries[--i];
         if (entry->addr == hi_addr) {
-            last_hi = *entry;
             *hi_val = entry->val;
-            return 1;
+            return 0;
         }
     }
-    return 0;
+    return tcc_error_noabort("unsupported hi/lo pcrel reloc scheme");
 }
 
 ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
@@ -279,15 +265,13 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         printf("PCREL_LO12_I: val=%lx addr=%lx\n", (long)val, (long)addr);
 #endif
         addr = val;
-        if (!riscv64_lookup_pcrel_hi(s1, addr, &val))
-          tcc_error_noabort("unsupported hi/lo pcrel reloc scheme");
+        riscv64_lookup_pcrel_hi(s1, addr, &val);
         write32le(ptr, (read32le(ptr) & 0xfffff)
                        | (((val - addr) & 0xfff) << 20));
         return;
     case R_RISCV_PCREL_LO12_S:
         addr = val;
-        if (!riscv64_lookup_pcrel_hi(s1, addr, &val))
-          tcc_error_noabort("unsupported hi/lo pcrel reloc scheme");
+        riscv64_lookup_pcrel_hi(s1, addr, &val);
         off32 = val - addr;
         write32le(ptr, (read32le(ptr) & ~0xfe000f80)
                        | ((off32 & 0xfe0) << 20)
