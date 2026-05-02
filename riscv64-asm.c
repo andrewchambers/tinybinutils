@@ -1837,9 +1837,8 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                     } else {
                         load(tcc_ireg(op->reg), op->vt);
                     }
-                    if (op->is_llong) {
-                        tcc_error("long long not implemented");
-                    }
+                    /* RV64: long long fits in a single 64-bit register;
+                       the load/store above already handles it correctly */
                 }
             }
         }
@@ -1867,9 +1866,7 @@ ST_FUNC void asm_gen_code(ASMOperand *operands, int nb_operands,
                     } else {
                         store(tcc_ireg(op->reg), op->vt);
                     }
-                    if (op->is_llong) {
-                        tcc_error("long long not implemented");
-                    }
+                    /* RV64: long long fits in a single 64-bit register */
                 }
             }
         }

@@ -19,6 +19,11 @@ ifeq (,$(filter i386 x86_64,$(ARCH)))
  SKIP += 85_asm-outside-function.test # x86 asm
  SKIP += 127_asm_goto.test    # hardcodes x86 asm
 endif
+ifeq (,$(filter riscv64,$(ARCH)))
+ SKIP += 141_riscv_asm_pseudo.test   # riscv64 asm
+ SKIP += 142_riscv_asm_longlong.test # riscv64 asm
+ SKIP += 143_riscv_asm_farith.test   # riscv64 asm
+endif
 ifeq ($(CONFIG_backtrace),no)
  SKIP += 113_btdll.test
  CONFIG_bcheck = no
