@@ -1229,6 +1229,30 @@ static void asm_ternary_opcode(TCCState *s1, int token)
         return;
 
     /* F/D extension */
+    case TOK_ASM_fadd_d:
+        asm_emit_f(token, 0x53 | (0 << 27) | (1 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fadd_s:
+        asm_emit_f(token, 0x53 | (0 << 27) | (0 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fsub_d:
+        asm_emit_f(token, 0x53 | (1 << 27) | (1 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fsub_s:
+        asm_emit_f(token, 0x53 | (1 << 27) | (0 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fmul_d:
+        asm_emit_f(token, 0x53 | (2 << 27) | (1 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fmul_s:
+        asm_emit_f(token, 0x53 | (2 << 27) | (0 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fdiv_d:
+        asm_emit_f(token, 0x53 | (3 << 27) | (1 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    case TOK_ASM_fdiv_s:
+        asm_emit_f(token, 0x53 | (3 << 27) | (0 << 25) | (7 << 12), ops, ops + 1, ops + 2);
+        return;
     case TOK_ASM_fsgnj_d:
         asm_emit_f(token, 0x53 | (4 << 27) | (1 << 25) | (0 << 12), ops, ops + 1, ops + 2);
         return;
@@ -1549,6 +1573,14 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_csrrw:
     case TOK_ASM_csrrwi:
     /* F/D extension */
+    case TOK_ASM_fadd_s:
+    case TOK_ASM_fadd_d:
+    case TOK_ASM_fsub_s:
+    case TOK_ASM_fsub_d:
+    case TOK_ASM_fmul_s:
+    case TOK_ASM_fmul_d:
+    case TOK_ASM_fdiv_s:
+    case TOK_ASM_fdiv_d:
     case TOK_ASM_fsgnj_d:
     case TOK_ASM_fsgnj_s:
     case TOK_ASM_fmax_s:
