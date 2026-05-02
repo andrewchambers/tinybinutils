@@ -678,14 +678,12 @@ static void asm_binary_opcode(TCCState* s1, int token)
         asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &ops[1], &imm);
         return;
     case TOK_ASM_neg:
-        /* sub rd, x0, rs */
-        imm.e.v = 1;
-        asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &zero, &imm);
+        /* sub rd, x0, rs2 */
+        asm_emit_r(token, (0xC << 2) | 3 | (32 << 25), &ops[0], &zero, &ops[1]);
         return;
     case TOK_ASM_negw:
-        /* sub rd, x0, rs */
-        imm.e.v = 1;
-        asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &zero, &imm);
+        /* subw rd, x0, rs2 */
+        asm_emit_r(token, (0xE << 2) | 3 | (32 << 25), &ops[0], &zero, &ops[1]);
         return;
     case TOK_ASM_jump:
         /* auipc x5, 0 */
