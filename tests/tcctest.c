@@ -32,8 +32,9 @@
 #define XLONG_LONG_FORMAT "%Lx"
 #endif
 
-// MinGW has 80-bit rather than 64-bit long double which isn't compatible with TCC or MSVC
-#if defined(_WIN32) && defined(__GNUC__)
+/* MinGW has 80-bit rather than 64-bit long double which isn't
+   compatible with printf in msvcrt */
+#if defined(_WIN32)
 #define LONG_DOUBLE double
 #define LONG_DOUBLE_LITERAL(x) x
 #else

@@ -124,6 +124,10 @@ enum {
 #define LDOUBLE_ALIGN 4
 #endif
 
+#if LDOUBLE_SIZE == 8
+# define TCC_USING_DOUBLE_FOR_LDOUBLE 1
+#endif
+
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
@@ -635,12 +639,9 @@ void load(int r, SValue *sv)
 	op=0xED100100;
 	if(!sign)
 	  op|=0x800000;
-#if LDOUBLE_SIZE == 8
-	if ((ft & VT_BTYPE) != VT_FLOAT)
-	  op|=0x8000;
-#else
 	if ((ft & VT_BTYPE) == VT_DOUBLE)
 	  op|=0x8000;
+#if LDOUBLE_SIZE != 8
 	else if ((ft & VT_BTYPE) == VT_LDOUBLE)
 	  op|=0x400000;
 #endif
@@ -760,13 +761,10 @@ void store(int r, SValue *sv)
 	op=0xED000100;
 	if(!sign)
 	  op|=0x800000;
-#if LDOUBLE_SIZE == 8
-	if ((ft & VT_BTYPE) != VT_FLOAT)
-	  op|=0x8000;
-#else
 	if ((ft & VT_BTYPE) == VT_DOUBLE)
 	  op|=0x8000;
-	if ((ft & VT_BTYPE) == VT_LDOUBLE)
+#if LDOUBLE_SIZE != 8
+	else if ((ft & VT_BTYPE) == VT_LDOUBLE)
 	  op|=0x400000;
 #endif
 	o(op|(fpr(r)<<12)|(fc>>2)|(base<<16));
@@ -904,15 +902,6 @@ static void gen_bounds_epilog(void)
 }
 #endif
 
-static int unalias_ldbl(int btype)
-{
-#if LDOUBLE_SIZE == 8
-    if (btype == VT_LDOUBLE)
-      btype = VT_DOUBLE;
-#endif
-    return btype;
-}
-
 /* Return whether a structure is an homogeneous float aggregate or not.
    The answer is true if all the elements of the structure are of the same
    primitive float type and there is less than 4 elements.
@@ -926,9 +915,10 @@ static int is_hgen_float_aggr(CType *type)
 
     ref = type->ref->next;
     if (ref) {
-      btype = unalias_ldbl(ref->type.t & VT_BTYPE);
+      btype = ref->type.t & VT_BTYPE;
       if (btype == VT_FLOAT || btype == VT_DOUBLE) {
-        for(; ref && btype == unalias_ldbl(ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++);
+        for(; ref && btype == (ref->type.t & VT_BTYPE); ref = ref->next, nb_fields++)
+            ;
         return !ref && nb_fields <= 4;
       }
     }
@@ -1254,7 +1244,6 @@ again:
                 size = 8;
               else
                 size = LDOUBLE_SIZE;
-
               if (size == 12)
                 r |= 0x400000;
               else if(size == 8)
@@ -1946,15 +1935,13 @@ void gen_opf(int op)
   vswap();
   c2 = is_fconst();
   x=0xEE000100;
-#if LDOUBLE_SIZE == 8
-  if ((vtop->type.t & VT_BTYPE) != VT_FLOAT)
-    x|=0x80;
-#else
   if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
     x|=0x80;
+#if LDOUBLE_SIZE != 8
   else if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE)
     x|=0x80000;
 #endif
+
   switch(op)
   {
     case '+':
@@ -2190,6 +2177,12 @@ ST_FUNC void gen_cvt_itof(int t)
         func=TOK___floatundisf;
       else
         func=TOK___floatdisf;
+    } else if((t & VT_BTYPE) == VT_DOUBLE) {
+      func_type = &func_double_type;
+      if(vtop->type.t & VT_UNSIGNED)
+        func=TOK___floatundidf;
+      else
+        func=TOK___floatdidf;
 #if LDOUBLE_SIZE != 8
     } else if((t & VT_BTYPE) == VT_LDOUBLE) {
       func_type = &func_ldouble_type;
@@ -2197,15 +2190,7 @@ ST_FUNC void gen_cvt_itof(int t)
         func=TOK___floatundixf;
       else
         func=TOK___floatdixf;
-    } else if((t & VT_BTYPE) == VT_DOUBLE) {
-#else
-    } else if((t & VT_BTYPE) == VT_DOUBLE || (t & VT_BTYPE) == VT_LDOUBLE) {
 #endif
-      func_type = &func_double_type;
-      if(vtop->type.t & VT_UNSIGNED)
-        func=TOK___floatundidf;
-      else
-        func=TOK___floatdidf;
     }
     if(func_type) {
       vpushsym(func_type, external_helper_sym(func));
@@ -2239,14 +2224,12 @@ void gen_cvt_ftoi(int t)
     if(u) {
       if(r2 == VT_FLOAT)
         func=TOK___fixunssfsi;
+      else if(r2 == VT_DOUBLE)
+	func=TOK___fixunsdfsi;
 #if LDOUBLE_SIZE != 8
       else if(r2 == VT_LDOUBLE)
 	func=TOK___fixunsxfsi;
-      else if(r2 == VT_DOUBLE)
-#else
-      else if(r2 == VT_LDOUBLE || r2 == VT_DOUBLE)
 #endif
-	func=TOK___fixunsdfsi;
     } else {
       r=fpr(gv(RC_FLOAT));
       r2=intr(vtop->r=get_reg(RC_INT));
@@ -2257,14 +2240,12 @@ void gen_cvt_ftoi(int t)
   } else if(t == VT_LLONG) { // unsigned handled in gen_cvt_ftoi1
     if(r2 == VT_FLOAT)
       func=TOK___fixsfdi;
+    else if(r2 == VT_DOUBLE)
+      func=TOK___fixdfdi;
 #if LDOUBLE_SIZE != 8
     else if(r2 == VT_LDOUBLE)
       func=TOK___fixxfdi;
-    else if(r2 == VT_DOUBLE)
-#else
-    else if(r2 == VT_LDOUBLE || r2 == VT_DOUBLE)
 #endif
-      func=TOK___fixdfdi;
   }
   if(func) {
     vpush_helper_func(func);

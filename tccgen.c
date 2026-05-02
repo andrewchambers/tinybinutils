@@ -323,12 +323,6 @@ ST_FUNC int ieee_finite(double d)
     return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
 }
 
-/* compiling intel long double natively */
-#if (defined __i386__ || defined __x86_64__) \
-    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
-# define TCC_IS_NATIVE_387
-#endif
-
 ST_FUNC void test_lvalue(void)
 {
     if (!(vtop->r & VT_LVAL))
@@ -2524,9 +2518,7 @@ void gen_negf(int op)
        operation.  We implement this with bit manipulation and have
        to do some type reinterpretation for this, which TCC can do
        only via memory.  */
-
     int align, size, bt;
-
     size = type_size(&vtop->type, &align);
     bt = vtop->type.t & VT_BTYPE;
 #if defined TCC_TARGET_X86_64 || defined TCC_TARGET_I386
@@ -3295,12 +3287,6 @@ error:
         }
 
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
-#if !defined TCC_IS_NATIVE && !defined TCC_IS_NATIVE_387
-        /* don't try to convert to ldouble when cross-compiling
-           (except when it's '0' which is needed for arm:gen_negf()) */
-        if (dbt_bt == VT_LDOUBLE && !nocode_wanted && (sf || vtop->c.i != 0))
-            c = 0;
-#endif
         if (c) {
             /* constant case: we can do it now */
             /* XXX: in ISOC, cannot do it if error in convert */
@@ -5646,6 +5632,7 @@ ST_FUNC void unary(void)
     case TOK_CLDOUBLE:
 #ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
         t = VT_DOUBLE | VT_LONG;
+        tokc.d = tokc.ld;
 #else
         t = VT_LDOUBLE;
 #endif
@@ -7781,6 +7768,71 @@ static int decl_designator(init_params *p, CType *type, unsigned long c,
     return al;
 }
 
+static void write_ldouble(unsigned char *d, void *s)
+{
+    //printf("long double %Lf\n", *(long double*)s);
+#ifdef TCC_CROSS_TEST
+    if (LDOUBLE_SIZE >= 10) {
+        double b = *(long double*)s;
+        s = &b;
+#else
+    if (sizeof (long double) == 8 && LDOUBLE_SIZE >= 10) {
+#endif
+        /* our 'long double' is a double really (_WIN32, __APPLE__) */
+        uint64_t m = *(uint64_t*)s;
+        int e = m >> 48;
+        int f = e >> 4 & 0x7FF;
+        m <<= 11;
+        if (0 == f) {
+            if (0 == m)
+                goto set;
+            for (f = 1; !(m & 1ULL<<63); --f)
+                m <<= 1;
+        }
+        if (f == 0x7ff)
+            f = 0x43FF;
+        e = (e & 0x8000) | (f + 0x3C00);
+        m |= 1ULL<<63;
+    set:
+    #if (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+        /* double -> extended */
+        write64le(d, m);
+        write16le(d+8, e);
+    #elif LDOUBLE_SIZE == 16
+        /* double -> quad */
+        write64le(d+6, m << 1);
+        write16le(d+14, e);
+    #endif
+        ;
+    } else {
+    #if LDOUBLE_SIZE == 8
+        /* long double -> double */
+        double b = *(long double*)s;
+        memcpy(d, &b, 8);
+    #elif (__i386__ || __x86_64__) && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+        /* extended -> extended */
+        memcpy(d, s, 10);
+    #elif (__i386__ || __x86_64__) && (defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64)
+        /* extended -> quad */
+        uint64_t m = *(uint64_t*)s;
+        int e = *(uint16_t*)((char*)s + 8);
+        write64le(d+6, m << 1);
+        write16le(d+14, e);
+    #elif (__aarch64__ || __riscv) && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+        /* quad -> extended */
+        uint64_t m = read64le((char*)s + 6);
+        int e = read16le((char*)s + 14);
+        (e & 0x7fff) && (m & 1) && 0 == ++m && ++e;
+        write64le(d, m >> 1 | ((e & 0x7fff) ? 1ULL<<63 : 0));
+        write16le(d+8, e);
+    #else
+        /* unknown */
+        if (sizeof (long double) == LDOUBLE_SIZE)
+            memcpy(d, s, LDOUBLE_SIZE);
+    #endif
+    }
+}
+
 /* store a value or an expression directly in global data or in local array */
 static void init_putv(init_params *p, CType *type, unsigned long c)
 {
@@ -7893,34 +7945,7 @@ static void init_putv(init_params *p, CType *type, unsigned long c)
                 write64le(ptr, val);
 		break;
 	    case VT_LDOUBLE:
-#if defined TCC_IS_NATIVE_387
-                /* Host and target platform may be different but both have x87.
-                   On windows, tcc does not use VT_LDOUBLE, except when it is a
-                   cross compiler.  In this case a mingw gcc as host compiler
-                   comes here with 10-byte long doubles, while msvc or tcc won't.
-                   tcc itself can still translate by asm.
-                   In any case we avoid possibly random bytes 11 and 12.
-                */
-                if (sizeof (long double) >= 10)
-                    memcpy(ptr, &vtop->c.ld, 10);
-#ifdef __TINYC__
-                else if (sizeof (long double) == sizeof (double))
-                    __asm__("fldl %1\nfstpt %0\n" : "=m" (*ptr) : "m" (vtop->c.ld));
-#endif
-                else
-#endif
-                /* For other platforms it should work natively, but may not work
-                   for cross compilers */
-                if (sizeof(long double) == LDOUBLE_SIZE)
-                    memcpy(ptr, &vtop->c.ld, LDOUBLE_SIZE);
-                else if (sizeof(double) == LDOUBLE_SIZE)
-                    *(double*)ptr = (double)vtop->c.ld;
-                else if (0 == memcmp(ptr, &vtop->c.ld, LDOUBLE_SIZE))
-                    ; /* nothing to do for 0.0 */
-#ifndef TCC_CROSS_TEST
-                else
-                    tcc_error("can't cross compile long double constants");
-#endif
+                write_ldouble(ptr, &vtop->c.ld);
 		break;
 
 #if PTR_SIZE == 8
