@@ -402,12 +402,13 @@
  DEF_ASMDIR(endr)
  DEF_ASMDIR(org)
  DEF_ASMDIR(quad)
-#if defined(TCC_TARGET_I386)
+#if PTR_SIZE == 4
  DEF_ASMDIR(code16)
  DEF_ASMDIR(code32)
-#elif defined(TCC_TARGET_X86_64)
+#else
  DEF_ASMDIR(code64)
-#elif defined(TCC_TARGET_RISCV64)
+#endif
+#if defined(TCC_TARGET_RISCV64)
  DEF_ASMDIR(option)
 #endif
  DEF_ASMDIR(short)

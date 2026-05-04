@@ -31,7 +31,9 @@ ifdef CONFIG_WIN32
   LIBTCCDEF = libtcc.def
  endif
  ifneq ($(CONFIG_debug),yes)
-  LDFLAGS += -s
+  ifneq ($(CC_NAME),clang)
+   LDFLAGS += -s
+  endif
  endif
  NATIVE_TARGET = $(if $(findstring arm64,$(ARCH)),arm64-win32,$(ARCH)-win$(if $(findstring arm,$(ARCH)),ce,32))
 else

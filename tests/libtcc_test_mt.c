@@ -162,6 +162,7 @@ void *reloc_state(TCCState *s, const char *entry)
 {
     void *func;
     tcc_add_symbol(s, "add", add);
+    tcc_add_symbol(s, "printf", printf);
     if (tcc_relocate(s) < 0) {
         fprintf(stderr, __FILE__ ": could not relocate tcc state.\n");
         return NULL;
@@ -337,16 +338,15 @@ int main(int argc, char **argv)
 
 #else
 #include <tcclib.h>
-
 #ifdef _WIN32
-# ifdef __i386__
-#  define LIBTCC_TEST_WINAPI __attribute__((__stdcall__))
-# else
-#  define LIBTCC_TEST_WINAPI
+# ifndef _WIN64
+    __declspec(stdcall)
 # endif
-void LIBTCC_TEST_WINAPI Sleep(unsigned int milliseconds);
+    void Sleep(unsigned);
+# define sleep_ms Sleep
 #else
-unsigned int sleep(unsigned int seconds);
+    int usleep(unsigned long);
+# define sleep_ms(x) usleep((x)*1000);
 #endif
 
 int fib(n)
@@ -356,11 +356,7 @@ int fib(n)
 
 int main(int argc, char **argv)
 {
-#ifdef _WIN32
-    Sleep(1000);
-#else
-    sleep(1);
-#endif
+    sleep_ms(333);
     printf(" %d", fib(atoi(argv[1])));
     return 0;
 }

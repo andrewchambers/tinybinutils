@@ -434,6 +434,8 @@ redo:
 
     /* relocate symbols */
     relocate_syms(s1, s1->symtab, 1);
+    if (s1->nb_errors)
+        goto redo;
     /* relocate sections */
 #ifdef TCC_TARGET_PE
     s1->pe_imagebase = mem;

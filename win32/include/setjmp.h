@@ -170,7 +170,6 @@ extern "C" {
     double D[8];
   } _JUMP_BUFFER;
 #else
-
 #define _JBLEN 1
 #define _JBTYPE int
 #endif
@@ -179,31 +178,22 @@ extern "C" {
 #define _JMP_BUF_DEFINED
 #endif
 
-  void * __cdecl __attribute__ ((__nothrow__)) mingw_getsp(void);
+#pragma pack(pop)
 
-#ifdef USE_MINGW_SETJMP_TWO_ARGS
-#ifndef _INC_SETJMPEX
-#define setjmp(BUF) _setjmp((BUF),mingw_getsp())
-  int __cdecl __attribute__ ((__nothrow__)) _setjmp(jmp_buf _Buf,void *_Ctx);
-#else
-#undef setjmp
-#define setjmp(BUF) _setjmpex((BUF),mingw_getsp())
-#define setjmpex(BUF) _setjmpex((BUF),mingw_getsp())
-  int __cdecl __attribute__ ((__nothrow__)) _setjmpex(jmp_buf _Buf,void *_Ctx);
-#endif
-#else
-#ifndef _INC_SETJMPEX
-#define setjmp _setjmp
-#endif
-  int __cdecl __attribute__ ((__nothrow__)) setjmp(jmp_buf _Buf);
+#if defined __aarch64__
+  int _setjmpex(jmp_buf _Buf, void *frame);
+  #define setjmp(BUF) _setjmpex((BUF), (char*)__builtin_frame_address(0) + 224)
+#elif defined __x86_64__
+  int _setjmp(jmp_buf _Buf, void *frame);
+  #define setjmp(BUF) _setjmp((BUF), __builtin_frame_address(0))
+#else /* __i386__ */
+  int _setjmp(jmp_buf _Buf);
+  #define setjmp _setjmp
 #endif
 
-  __declspec(noreturn) __attribute__ ((__nothrow__)) void __cdecl ms_longjmp(jmp_buf _Buf,int _Value)/* throw(...)*/;
-  __declspec(noreturn) __attribute__ ((__nothrow__)) void __cdecl longjmp(jmp_buf _Buf,int _Value);
+__declspec(noreturn) void longjmp(jmp_buf _Buf,int _Value);
 
 #ifdef __cplusplus
 }
 #endif
-
-#pragma pack(pop)
 #endif

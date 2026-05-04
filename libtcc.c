@@ -124,8 +124,15 @@ static void tcc_add_systemdir(TCCState *s)
     tcc_add_library_path(s, normalize_slashes(buf));
 }
 #endif
+/* for tcc -E : On windows (depending on compiler) a FILE*
+   must be created by the same module where it is used. */
+PUB_FUNC FILE *tcc_fopen(const char *f, const char *m) {
+    return fopen(f, m);
+}
+PUB_FUNC int tcc_fclose(FILE *f) {
+    return fclose(f);
+}
 #endif
-
 /********************************************************/
 
 PUB_FUNC void tcc_enter_state(TCCState *s1)

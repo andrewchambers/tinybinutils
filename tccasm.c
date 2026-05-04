@@ -25,6 +25,26 @@
 static Section *last_text_section; /* to handle .previous asm directive */
 static int asmgoto_n;
 
+static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
+static Sym* asm_new_label(TCCState *s1, int label, int is_local);
+static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
+
+#if PTR_SIZE == 8
+/* output constant with relocation if 'r & VT_SYM' is true */
+ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
+{
+    if (r & VT_SYM)
+        greloca(cur_text_section, sym, ind, R_DATA_PTR, c), c=0;
+    gen_le32(c);
+    gen_le32(c>>32);
+}
+
+ST_FUNC void gen_expr64(ExprValue *pe)
+{
+    gen_addr64(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
+}
+#endif
+
 static int asm_get_prefix_name(TCCState *s1, const char *prefix, unsigned int n)
 {
     char buf[64];
@@ -36,10 +56,6 @@ ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
 {
     return asm_get_prefix_name(s1, "L..", n);
 }
-
-static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
-static Sym* asm_new_label(TCCState *s1, int label, int is_local);
-static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
 
 /* If a C name has an _ prepended then only asm labels that start
    with _ are representable in C, by removing the first _.  ASM names
@@ -328,12 +344,12 @@ static inline void asm_expr_sum(TCCState *s1, ExprValue *pe)
 		if (esym1 && esym1->st_shndx == esym2->st_shndx
 		    && esym1->st_shndx != SHN_UNDEF) {
 		    /* we also accept defined symbols in the same section */
-		    pe->v += esym1->st_value - esym2->st_value;
+		    pe->v += (int)(esym1->st_value - esym2->st_value);
 		    pe->sym = NULL;
 		} else if (esym2->st_shndx == cur_text_section->sh_num) {
 		    /* When subtracting a defined symbol in current section
 		       this actually makes the value PC-relative.  */
-		    pe->v += 0 - esym2->st_value;
+		    pe->v += (int)(0 - esym2->st_value);
 		    pe->pcrel = 1;
 		    e2.sym = NULL;
 		} else {
@@ -543,7 +559,7 @@ static void asm_parse_directive(TCCState *s1, int global)
         ind += size;
         break;
     case TOK_ASMDIR_quad:
-#ifdef TCC_TARGET_X86_64
+#if PTR_SIZE == 8
 	size = 8;
 	goto asm_data;
 #else
@@ -592,7 +608,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             if (sec->sh_type != SHT_NOBITS) {
                 if (size == 4) {
                     gen_expr32(&e);
-#ifdef TCC_TARGET_X86_64
+#if PTR_SIZE == 8
 		} else if (size == 8) {
 		    gen_expr64(&e);
 #endif
@@ -812,6 +828,7 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_size:
         { 
             Sym *sym;
+            ElfSym *esym;
 
             next();
 	    if (tok < TOK_IDENT)
@@ -823,8 +840,10 @@ static void asm_parse_directive(TCCState *s1, int global)
             tcc_warning_c(warn_unsupported)("ignoring .size %s,*", get_tok_str(tok, NULL));
             next();
             skip(',');
-            while (tok != TOK_LINEFEED && tok != ';' && tok != CH_EOF) {
-                next();
+            n = asm_int_expr(s1);
+            esym = elfsym(sym);
+            if (esym) {
+                esym->st_size = n;
             }
         }
         break;
@@ -952,7 +971,7 @@ static void asm_parse_directive(TCCState *s1, int global)
         }
         break;
 #endif
-#ifdef TCC_TARGET_X86_64
+#if PTR_SIZE == 8
     /* added for compatibility with GAS */
     case TOK_ASMDIR_code64:
         next();

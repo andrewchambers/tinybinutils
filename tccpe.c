@@ -1958,6 +1958,7 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
     for (n = o + sizeof *p; o < n; o += sizeof p->BeginAddress)
         put_elf_reloc(symtab_section, pd, o, R_XXX_RELATIVE, s1->uw_sym);
 }
+
 #elif defined(TCC_TARGET_ARM64)
 /* ARM64 unwind codes:
    save_fplr_x: 10iiiiii  - stp x29,lr,[sp,#-(i+1)*8]!
@@ -1975,10 +1976,7 @@ static Section *pe_add_unwind_info(TCCState *s1)
         s1->uw_pdata->sh_addralign = 4;
     }
     s = find_section(s1, ".xdata");
-    if (NULL == s) {
-        s = new_section(s1, ".xdata", SHT_PROGBITS, SHF_ALLOC);
-        s->sh_addralign = 4;
-    }
+    s->sh_addralign = 4;
     if (0 == s1->uw_sym)
         s1->uw_sym = put_elf_sym(symtab_section, 0, 0, 0, 0,
                                   text_section->sh_num, ".uw_text_base");
@@ -1992,31 +1990,22 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 {
     TCCState *s1 = tcc_state;
     Section *pd, *xd;
-    unsigned o, n, d, code_bytes, func_len, stack_slots;
+    unsigned o, d, code_bytes, func_len;
     unsigned char *q;
     uint32_t header;
-    struct {
+    struct /* _RUNTIME_FUNCTION */ {
         DWORD BeginAddress;
-        DWORD EndAddress;
         DWORD UnwindData;
     } *p;
+
+    int epilog;
 
     xd = pe_add_unwind_info(s1);
     pd = s1->uw_pdata;
 
-    stack = (stack + 15) & ~15;
-    stack_slots = stack >> 4;
     func_len = (end - start) >> 2;
     code_bytes = 0;
-    if (stack_slots) {
-        if (stack_slots <= 31) {
-            code_bytes += 1;
-        } else if (stack_slots <= 0x7ff) {
-            code_bytes += 2;
-        } else {
-            code_bytes += 4;
-        }
-    }
+    epilog = code_bytes;
     code_bytes += 3; /* set_fp, save_fplr_x, end */
     code_bytes = (code_bytes + 3) & ~3;
 
@@ -2025,23 +2014,13 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
     q = section_ptr_add(xd, 4 + code_bytes);
 
     /* Full ARM64 xdata header: E=1 with one epilog and no exception handler. */
-    header = (func_len & 0x3ffff) | (1u << 21) | ((code_bytes >> 2) << 27);
+    header = (func_len & 0x3ffff)
+        | 1 << 21
+        | (epilog & 0x1F) << 22
+        | (code_bytes >> 2) << 27
+        ;
     write32le(q, header);
     q += 4;
-
-    if (stack_slots) {
-        if (stack_slots <= 31) {
-            *q++ = stack_slots; /* alloc_s */
-        } else if (stack_slots <= 0x7ff) {
-            *q++ = 0xC0 | (stack_slots >> 8); /* alloc_m */
-            *q++ = stack_slots & 0xff;
-        } else {
-            *q++ = 0xE0; /* alloc_l */
-            *q++ = (stack_slots >> 16) & 0xff;
-            *q++ = (stack_slots >> 8) & 0xff;
-            *q++ = stack_slots & 0xff;
-        }
-    }
     *q++ = 0xE1; /* set_fp */
     *q++ = 0x9B; /* save_fplr_x: stp x29,lr,[sp,#-224]! */
     *q++ = 0xE4; /* end */
@@ -2050,14 +2029,10 @@ ST_FUNC void pe_add_unwind_data(unsigned start, unsigned end, unsigned stack)
 
     o = pd->data_offset;
     p = section_ptr_add(pd, sizeof *p);
-
     p->BeginAddress = start;
-    p->EndAddress = end;
     p->UnwindData = d;
-
-    for (n = o + 2 * sizeof p->BeginAddress; o < n; o += sizeof p->BeginAddress)
-        put_elf_reloc(symtab_section, pd, o, R_XXX_RELATIVE, s1->uw_sym);
-    put_elf_reloc(symtab_section, pd, n, R_XXX_RELATIVE, s1->uw_xsym);
+    put_elf_reloc(symtab_section, pd, o, R_XXX_RELATIVE, s1->uw_sym);
+    put_elf_reloc(symtab_section, pd, o + 4, R_XXX_RELATIVE, s1->uw_xsym);
 }
 #endif
 /* ------------------------------------------------------------- */
@@ -2252,20 +2227,22 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
     resolve_common_syms(s1);
     pe_set_options(s1, &pe);
     pe_check_symbols(&pe);
-
     if (s1->nb_errors)
-        ;
-    else if (filename) {
+        goto done;
+    if (filename) {
         pe_assign_addresses(&pe);
         relocate_syms(s1, s1->symtab, 0);
+        if (s1->nb_errors)
+            goto done;
         s1->pe_imagebase = pe.imagebase;
         relocate_sections(s1);
         pe.start_addr = (DWORD)
             (get_sym_addr(s1, pe.start_symbol, 1, 1) - pe.imagebase);
-        if (0 == s1->nb_errors)
-            pe_write(&pe);
-        dynarray_reset(&pe.sec_info, &pe.sec_count);
+        if (s1->nb_errors)
+            goto done;
+        pe_write(&pe);
     } else {
+        /* -run */
 #ifdef TCC_IS_NATIVE
         pe.thunk = data_section;
         pe_build_imports(&pe);
@@ -2275,6 +2252,8 @@ ST_FUNC int pe_output_file(TCCState *s1, const char *filename)
 #endif
 #endif
     }
+done:
+    dynarray_reset(&pe.sec_info, &pe.sec_count);
     pe_free_imports(&pe);
 #if PE_PRINT_SECTIONS
     if (g_debug & 8)

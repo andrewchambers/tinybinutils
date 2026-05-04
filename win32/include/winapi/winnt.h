@@ -47,9 +47,6 @@ extern "C" {
 #endif
 #endif
 
-#if !defined(I_X86_) && !defined(_IA64_) && !defined(_AMD64_) && defined(__aarch64__) && !defined(_ARM64_)
-#define _ARM64_
-#endif
 
 #ifdef _WIN64
 #define MAX_NATURAL_ALIGNMENT sizeof(ULONGLONG)
@@ -832,8 +829,6 @@ typedef DWORD LCID;
   typedef ULONG_PTR KSPIN_LOCK;
   typedef KSPIN_LOCK *PKSPIN_LOCK;
 
-#if defined(_AMD64_) || defined(_ARM64_)
-
 #if defined(__x86_64) && !defined(RC_INVOKED)
 
 #ifdef __cplusplus
@@ -1285,7 +1280,6 @@ typedef DWORD LCID;
 #ifdef __cplusplus
   }
 #endif
-#endif
 
 #define EXCEPTION_READ_FAULT 0
 #define EXCEPTION_WRITE_FAULT 1
@@ -1339,7 +1333,6 @@ typedef DWORD LCID;
 
 #define LEGACY_SAVE_AREA_LENGTH sizeof(XMM_SAVE_AREA32)
 
-#if defined(__x86_64) || defined(_AMD64_)
   typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
     DWORD64 P1Home;
     DWORD64 P2Home;
@@ -1411,7 +1404,6 @@ typedef DWORD LCID;
     DWORD64 LastExceptionToRip;
     DWORD64 LastExceptionFromRip;
   } CONTEXT,*PCONTEXT;
-#endif /* defined(__x86_64) || defined(_AMD64_) */
 
 #define RUNTIME_FUNCTION_INDIRECT 0x1
 
@@ -1422,41 +1414,24 @@ typedef DWORD LCID;
   } RUNTIME_FUNCTION,*PRUNTIME_FUNCTION;
 
   typedef PRUNTIME_FUNCTION (*PGET_RUNTIME_FUNCTION_CALLBACK)(DWORD64 ControlPc,PVOID Context);
+  typedef DWORD (*POUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK)(HANDLE Process,PVOID TableAddress,PDWORD Entries,PRUNTIME_FUNCTION *Functions);
 
-#if defined(_ARM64_) || defined(__aarch64__)
+#define OUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK_EXPORT_NAME "OutOfProcessFunctionTableCallback"
+#endif /* defined(__x86_64) && !defined(RC_INVOKED) */
+
+#if defined(_ARM64_)
 
 /* ARM64 Context Definition */
 #define CONTEXT_ARM64 0x00400000
-
-#ifndef CONTEXT_CONTROL
 #define CONTEXT_CONTROL (CONTEXT_ARM64 | 0x00000001L)
-#endif
-#ifndef CONTEXT_INTEGER
 #define CONTEXT_INTEGER (CONTEXT_ARM64 | 0x00000002L)
-#endif
-#ifndef CONTEXT_FLOATING_POINT
 #define CONTEXT_FLOATING_POINT (CONTEXT_ARM64 | 0x00000004L)
-#endif
-#ifndef CONTEXT_DEBUG
 #define CONTEXT_DEBUG (CONTEXT_ARM64 | 0x00000008L)
-#endif
-
-#ifndef CONTEXT_FULL
 #define CONTEXT_FULL (CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT)
-#endif
-#ifndef CONTEXT_ALL
 #define CONTEXT_ALL (CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT | CONTEXT_DEBUG)
-#endif
-
-#ifndef ARM64_MAX_BREAKPOINTS
 #define ARM64_MAX_BREAKPOINTS 8
-#endif
-#ifndef ARM64_MAX_WATCHPOINTS
 #define ARM64_MAX_WATCHPOINTS 2
-#endif
 
-#ifndef _ARM64_NT_NEON128_DECLARED
-#define _ARM64_NT_NEON128_DECLARED
   typedef union _ARM64_NT_NEON128 {
     struct {
       ULONGLONG Low;
@@ -1467,10 +1442,7 @@ typedef DWORD LCID;
     WORD H[8];
     BYTE B[16];
   } ARM64_NT_NEON128,*PARM64_NT_NEON128;
-#endif
 
-#ifndef _ARM64_CONTEXT_DECLARED
-#define _ARM64_CONTEXT_DECLARED
   typedef struct DECLSPEC_ALIGN(16) _ARM64_NT_CONTEXT {
     ULONG ContextFlags;
     ULONG Cpsr;
@@ -1522,27 +1494,20 @@ typedef DWORD LCID;
   } ARM64_NT_CONTEXT,*PARM64_NT_CONTEXT;
 
   C_ASSERT(sizeof(ARM64_NT_CONTEXT) == 0x390);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, ContextFlags) == 0x000);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, X) == 0x008);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Fp) == 0x0f0);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Lr) == 0x0f8);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Sp) == 0x100);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Pc) == 0x108);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, V) == 0x110);
-  C_ASSERT(sizeof(((ARM64_NT_CONTEXT *)0)->V[0]) == 16);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Fpcr) == 0x310);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Fpsr) == 0x314);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Bvr) == 0x338);
-  C_ASSERT(offsetof(ARM64_NT_CONTEXT, Wvr) == 0x380);
-#endif
 
   typedef ARM64_NT_CONTEXT CONTEXT,*PCONTEXT;
 
-#endif /* _ARM64_ || __aarch64__ */
+  typedef struct _RUNTIME_FUNCTION {
+    DWORD BeginAddress;
+    DWORD UnwindData;
+  } RUNTIME_FUNCTION,*PRUNTIME_FUNCTION;
+
+  typedef PRUNTIME_FUNCTION (*PGET_RUNTIME_FUNCTION_CALLBACK)(DWORD64 ControlPc,PVOID Context);
   typedef DWORD (*POUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK)(HANDLE Process,PVOID TableAddress,PDWORD Entries,PRUNTIME_FUNCTION *Functions);
 
-#define OUT_OF_PROCESS_FUNCTION_TABLE_CALLBACK_EXPORT_NAME "OutOfProcessFunctionTableCallback"
+#endif /* _ARM64_ */
 
+#if (defined _ARM64_ || defined _AMD64_) && !defined RC_INVOKED
   NTSYSAPI VOID __cdecl RtlRestoreContext (PCONTEXT ContextRecord,struct _EXCEPTION_RECORD *ExceptionRecord);
   NTSYSAPI BOOLEAN __cdecl RtlAddFunctionTable(PRUNTIME_FUNCTION FunctionTable,DWORD EntryCount,DWORD64 BaseAddress);
   NTSYSAPI BOOLEAN __cdecl RtlInstallFunctionTableCallback(DWORD64 TableIdentifier,DWORD64 BaseAddress,DWORD Length,PGET_RUNTIME_FUNCTION_CALLBACK Callback,PVOID Context,PCWSTR OutOfProcessCallbackDll);

@@ -494,13 +494,6 @@ ST_FUNC void gen_expr32(ExprValue *pe)
 	gen_addr32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }
 
-#ifdef TCC_TARGET_X86_64
-ST_FUNC void gen_expr64(ExprValue *pe)
-{
-    gen_addr64(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
-}
-#endif
-
 /* XXX: unify with C code output ? */
 static void gen_disp32(ExprValue *pe)
 {

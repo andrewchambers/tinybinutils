@@ -23,13 +23,6 @@ typedef unsigned long long uint64_t;
 #include <string.h>
 #endif
 
-#if !defined __riscv && !defined __APPLE__
-void __clear_cache(void *beg, void *end)
-{
-    __arm64_clear_cache(beg, end);
-}
-#endif
-
 typedef union {
     struct { uint64_t x0, x1; };
     long double f;

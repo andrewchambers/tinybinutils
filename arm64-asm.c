@@ -86,11 +86,7 @@ enum {
 #define TREG_X30 30
 #define TREG_SP  31
 
-#ifdef TCC_TARGET_PE
-#define ARM64_FREG_BASE 19
-#else
 #define ARM64_FREG_BASE 20
-#endif
 #define ARM64_FREG_LAST (ARM64_FREG_BASE + 7)
 
 typedef struct Operand {

@@ -579,7 +579,7 @@ ST_FUNC void load(int r, SValue *sv)
     if (svr < VT_CONST) {
         if (IS_FREG(r) && IS_FREG(svr))
             if (svtt == VT_LDOUBLE)
-                o(ARM64_MOV_V16B | fltr(r) | fltr(svr) << 5);
+                o(ARM64_MOV_V16B | fltr(r) | fltr(svr) * 0x10020);
                     // mov v(r).16b,v(svr).16b
             else
                 o(ARM64_FMOV_SCALAR | fltr(r) | fltr(svr) << 5); // fmov d(r),d(svr)
@@ -794,7 +794,7 @@ static int arm64_hfa_aux(CType *type, int *fsize, int num)
             return num;
         }
     }
-    else if ((type->t & VT_ARRAY) && ((type->t & VT_BTYPE) != VT_PTR)) {
+    else if (type->t & VT_ARRAY) { /* handle float array within struct */
         int num1;
         if (!type->ref->c)
             return num;
@@ -811,8 +811,7 @@ static int arm64_hfa_aux(CType *type, int *fsize, int num)
 
 static int arm64_hfa(CType *type, unsigned *fsize)
 {
-    if ((type->t & VT_BTYPE) == VT_STRUCT ||
-        ((type->t & VT_ARRAY) && ((type->t & VT_BTYPE) != VT_PTR))) {
+    if ((type->t & VT_BTYPE) == VT_STRUCT) {
         int sz = 0;
         int n = arm64_hfa_aux(type, &sz, 0);
         if (0 < n && n <= 4) {
@@ -1037,6 +1036,13 @@ static void arm64_sub_sp(uint64_t diff)
     }
 }
 
+static int gv_addr(int r)
+{
+    gaddrof();
+    vtop->type.t = VT_PTR;
+    return gv(r);
+}
+
 ST_FUNC void gfunc_call(int nb_args)
 {
     CType *return_type;
@@ -1147,9 +1153,7 @@ ST_FUNC void gfunc_call(int nb_args)
             else if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
                 int align, size = type_size(&vtop->type, &align);
                 if (size) {
-                    vtop->type.t = VT_PTR;
-                    gaddrof();
-                    gv(RC_R(a[i] / 2));
+                    gv_addr(RC_R(a[i] / 2));
                     arm64_ldrs(a[i] / 2, size);
                 }
             }
@@ -1165,9 +1169,7 @@ ST_FUNC void gfunc_call(int nb_args)
                 uint32_t j, sz, n = arm64_hfa(&vtop->type, &sz);
                 if (n > 0) {
                     /* HFA struct - load from memory into float registers */
-                    vtop->type.t = VT_PTR;
-                    gaddrof();
-                    gv(RC_R30);
+                    gv_addr(RC_R30);
                     for (j = 0; j < n; j++)
                         o(0x3d4003c0 |
                           (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
@@ -1186,7 +1188,7 @@ ST_FUNC void gfunc_call(int nb_args)
     if ((return_type->t & VT_BTYPE) == VT_STRUCT) {
         if (a[0] == 1) {
             // indirect return: set x8 and discard the stack value
-            gv(RC_R(8));
+            gv_addr(RC_R(8));
             --vtop;
         }
         else
@@ -1206,7 +1208,7 @@ ST_FUNC void gfunc_call(int nb_args)
         int bt = rt & VT_BTYPE;
         if (bt == VT_STRUCT && !(a[0] & 1)) {
             // A struct was returned in registers, so write it out:
-            gv(RC_R(8));
+            gv_addr(RC_R(8));
             --vtop;
             if (a[0] == 0) {
                 int align, size = type_size(return_type, &align);
@@ -1271,6 +1273,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     for (sym = func_type->ref; sym; sym = sym->next)
         ++n;
+
     pcs_n = n - 1;
     c = n + variadic;
     t = tcc_malloc(c * sizeof(*t));
@@ -1321,6 +1324,8 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
 
     arm64_func_start_offset = ind;
     o(0xa9b27bfd); // stp x29,x30,[sp,#-224]!
+    o(0x910003fd); // mov x29,sp
+
     for (i = 0; i < last_float; i++)
         // stp q0,q1,[sp,#16], stp q2,q3,[sp,#48]
         // stp q4,q5,[sp,#80], stp q6,q7,[sp,#112]
@@ -1368,7 +1373,6 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     tcc_free(a);
     tcc_free(t);
 
-    o(0x910003fd); // mov x29,sp
     arm64_func_sub_sp_offset = ind;
     /* In gfunc_epilog these will be replaced with stack setup code. */
     for (i = 0; i < ARM64_FUNC_STACK_SETUP_SLOTS; ++i)
@@ -1384,8 +1388,7 @@ ST_FUNC void gen_va_start(void)
 {
     int r;
     --vtop; // we don't need the "arg"
-    gaddrof();
-    r = intr(gv(RC_INT));
+    r = intr(gv_addr(RC_INT));
 
 #ifdef TCC_TARGET_PE
     if (arm64_func_va_list_stack) {
@@ -1433,13 +1436,12 @@ ST_FUNC void gen_va_arg(CType *t)
     uint32_t r0, r1;
 
 #ifdef TCC_TARGET_PE
-    int indirect = 0, slot = size + 7 & -8;
+    int indirect = 0, slot = (size + 7) & -8;
 
     if (size > 16)
         indirect = 1, slot = 8;
 
-    gaddrof();
-    r0 = intr(gv(RC_INT));
+    r0 = intr(gv_addr(RC_INT));
     r1 = get_reg(RC_INT);
     vtop[0].r = r1 | VT_LVAL;
     r1 = intr(r1);
@@ -1459,7 +1461,6 @@ ST_FUNC void gen_va_arg(CType *t)
         o(0x9100001e | r1 << 5 | slot << 10); // add x30,x(r1),#(slot)
         o(0xf900001e | r0 << 5); // str x30,[x(r0)] // ap += slot
     }
-
     if (indirect)
         o(ARM64_LDR_X | ARM64_RN(r1) | r1); // ldr x(r1),[x(r1)]
 
@@ -1469,8 +1470,7 @@ ST_FUNC void gen_va_arg(CType *t)
     if (!is_float(t->t))
         hfa = arm64_hfa(t, &fsize);
 
-    gaddrof();
-    r0 = intr(gv(RC_INT));
+    r0 = intr(gv_addr(RC_INT));
     r1 = get_reg(RC_INT);
     vtop[0].r = r1 | VT_LVAL;
     r1 = intr(r1);
@@ -1570,8 +1570,7 @@ ST_FUNC void gfunc_return(CType *func_type)
     case 0:
         if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
             int align, size = type_size(func_type, &align);
-            gaddrof();
-            gv(RC_R(0));
+            gv_addr(RC_R(0));
             arm64_ldrs(0, size);
         }
         else
@@ -1590,8 +1589,7 @@ ST_FUNC void gfunc_return(CType *func_type)
         if ((func_type->t & VT_BTYPE) == VT_STRUCT) {
           /* HFA struct return - load from the address on vtop into float registers */
           uint32_t j, sz, n = arm64_hfa(func_type, &sz);
-          gaddrof();
-          gv(RC_R(0));
+          gv_addr(RC_R(0));
           for (j = 0; j < n; j++)
               o(0x3d400000 |
                 (sz & 16) << 19 | -(sz & 8) << 27 | (sz & 4) << 29 |
