@@ -110,8 +110,8 @@ libtcc_test_mt$(EXESUF): libtcc_test_mt.c
 
 # test.ref - generate using cc
 test.ref: tcctest.c
-	$(CC) -o tcctest.gcc$(EXESUF) $< $(CFLAGS) -w -O0 -std=gnu99 -fno-omit-frame-pointer
-	./tcctest.gcc$(EXESUF) > $@
+	$(TCC) $(TCCFLAGS) -w -o tcctest.tcc$(EXESUF) $<
+	./tcctest.tcc$(EXESUF) > $@
 
 # auto test
 test1 test1b: tcctest.c test.ref
