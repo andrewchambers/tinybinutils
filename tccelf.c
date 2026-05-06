@@ -114,7 +114,7 @@ ST_FUNC void tccelf_new(TCCState *s)
 #ifndef ELF_OBJ_ONLY
     if (NULL == s->elfint && s1->output_type != TCC_OUTPUT_OBJ) {
         const char *p = CONFIG_TCC_ELFINTERP;
-#ifdef TCC_TARGET_ARM
+#if defined TCC_TARGET_ARM && defined CONFIG_TCC_ELFINTERP_ARMHF
         if (s->float_abi == ARM_HARD_FLOAT)
             p = CONFIG_TCC_ELFINTERP_ARMHF;
 #endif
