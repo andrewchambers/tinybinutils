@@ -23,6 +23,10 @@ ifeq (,$(filter riscv64,$(ARCH)))
  SKIP += 141_riscv_asm_pseudo.test   # riscv64 asm
  SKIP += 142_riscv_asm_longlong.test # riscv64 asm
  SKIP += 143_riscv_asm_farith.test   # riscv64 asm
+ SKIP += 144_riscv_csr_pseudo.test   # riscv64 asm
+ SKIP += 145_riscv_fp_cmp_cvt.test   # riscv64 asm
+ SKIP += 146_riscv_amo.test          # riscv64 asm
+ SKIP += 147_riscv_fcvt_round.test   # riscv64 asm
 endif
 ifeq ($(CONFIG_backtrace),no)
  SKIP += 113_btdll.test
@@ -72,6 +76,9 @@ ARGS =
 # And some tests don't test the right thing with -run
 NORUN =
 42_function_pointer.test : NORUN = true
+# riscv64 asm tests validate encoding, raw regs may crash at runtime
+145_riscv_fp_cmp_cvt.test : NORUN = true
+146_riscv_amo.test : NORUN = true
 
 # Some tests might need different flags
 FLAGS =
@@ -86,7 +93,12 @@ endif
 96_nodata_wanted.test : FLAGS += -dt
 139_arm64_errors.test : FLAGS += -dt
 
-# Always generate certain .expects (don't put these in the GIT),
+GEN-ALWAYS =
+# GEN-ALWAYS += 95_bitfields.expect # does not work
+
+# fcvt rounding 3-dot names not supported by host binutils, use TCC
+147_riscv_fcvt_round.test : GEN = $(GEN-TCC)
+147_riscv_fcvt_round.test : NORUN = true
 GEN-ALWAYS =
 # GEN-ALWAYS += 95_bitfields.expect # does not work
 

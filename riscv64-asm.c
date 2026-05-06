@@ -738,6 +738,15 @@ static void asm_binary_opcode(TCCState* s1, int token)
         asm_emit_f(token, 0x53 | (4 << 27) | (0 << 25) | (2 << 12), &ops[0], &ops[1], &ops[1]);
         return;
 
+    /* CSR pseudo-instructions */
+    case TOK_ASM_csrr:
+        /* csrrs rd, csr, x0 */
+        asm_emit_opcode(0x73 | (2 << 12) | (ops[1].e.v << 20) | ENCODE_RD(ops[0].reg));
+        return;
+    case TOK_ASM_csrw:
+        /* csrrw x0, csr, rs */
+        asm_emit_opcode(0x73 | (1 << 12) | (ops[0].e.v << 20) | ENCODE_RS1(ops[1].reg));
+        return;
     case TOK_ASM_csrs:
         /* csrrs x0, csr, rs */
         asm_emit_opcode(0x73 | (2 << 12) | (ops[0].e.v << 20) | ENCODE_RS1(ops[1].reg));
@@ -753,6 +762,18 @@ static void asm_binary_opcode(TCCState* s1, int token)
     case TOK_ASM_fscsr:
         /* csrrw rd, fcsr, rs */
         asm_emit_opcode(0x73 | (1 << 12) | (3 << 20) | ENCODE_RD(ops[0].reg) | ENCODE_RS1(ops[1].reg));
+        return;
+    case TOK_ASM_csrwi:
+        /* csrrwi x0, csr, uimm */
+        asm_emit_opcode(0x73 | (5 << 12) | (ops[0].e.v << 20) | ENCODE_RS1(ops[1].e.v));
+        return;
+    case TOK_ASM_csrsi:
+        /* csrrsi x0, csr, uimm */
+        asm_emit_opcode(0x73 | (6 << 12) | (ops[0].e.v << 20) | ENCODE_RS1(ops[1].e.v));
+        return;
+    case TOK_ASM_csrci:
+        /* csrrci x0, csr, uimm */
+        asm_emit_opcode(0x73 | (7 << 12) | (ops[0].e.v << 20) | ENCODE_RS1(ops[1].e.v));
         return;
     default:
         expect("binary instruction");
@@ -1695,6 +1716,11 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_fneg_d:
     case TOK_ASM_csrc:
     case TOK_ASM_csrs:
+    case TOK_ASM_csrr:
+    case TOK_ASM_csrw:
+    case TOK_ASM_csrwi:
+    case TOK_ASM_csrsi:
+    case TOK_ASM_csrci:
     case TOK_ASM_fsrm:
     case TOK_ASM_fscsr:
         asm_binary_opcode(s1, token);
