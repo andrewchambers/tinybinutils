@@ -2852,6 +2852,27 @@ static void create_arm_attribute_section(TCCState *s1)
 }
 #endif
 
+#ifdef TCC_TARGET_RISCV64
+static void create_riscv_attribute_section(TCCState *s1)
+{
+    static const unsigned char riscv_attr[] = {
+        0x41,                           /* 'A' */
+        0x3c, 0x00, 0x00, 0x00,         /* total_len = 60 */
+        'r', 'i', 's', 'c', 'v', 0x00,  /* "riscv\0" */
+        0x2d, 0x00, 0x00, 0x00,         /* file_len = 45 */
+        0x05,                           /* Tag_RISCV_arch */
+        0x28, 0x00, 0x00, 0x00,         /* isa_len = 40 */
+        'r','v','6','4','i','2','p','1','_','m','2','p','0','_',
+        'a','2','p','1','_','f','2','p','2','_','d','2','p','2','_',
+        'c','2','p','0','_','z','i','c','s','r','2','p','0', 0x00,
+    };
+    Section *attr = new_section(s1, ".riscv.attributes", SHT_RISCV_ATTRIBUTES, 0);
+    unsigned char *ptr = section_ptr_add(attr, sizeof(riscv_attr));
+    attr->sh_addralign = 1;
+    memcpy(ptr, riscv_attr, sizeof(riscv_attr));
+}
+#endif
+
 #if TARGETOS_OpenBSD || TARGETOS_NetBSD || TARGETOS_FreeBSD
 
 static void fill_bsd_note(Section *s, int type,
@@ -3112,6 +3133,9 @@ static int elf_output_obj(TCCState *s1, const char *filename)
 {
     Section *s;
     int i, ret, file_offset;
+#ifdef TCC_TARGET_RISCV64
+    create_riscv_attribute_section(s1);
+#endif
     /* Allocate strings for section names */
     alloc_sec_names(s1, 1);
     file_offset = (sizeof (ElfW(Ehdr)) + 3) & -4;
