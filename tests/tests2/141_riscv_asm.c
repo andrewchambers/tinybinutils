@@ -240,29 +240,29 @@ int csr_pseudo_main(void)
     asm volatile("csrr %0, 0x003" : "=r"(old));
 
     asm volatile("csrr %0, 0x003" : "=r"(tmp));
-    //printf("csrr fcsr=%x\n", (unsigned)tmp);
+    printf("csrr fcsr=%x\n", (unsigned)tmp);
 
     asm volatile("csrw 0x003, %0" : : "r"(0xE0));
     asm volatile("csrr %0, 0x003" : "=r"(tmp));
-    //printf("csrw: wrote e0 got %x\n", (unsigned)tmp);
+    printf("csrw: wrote e0 got %x\n", (unsigned)tmp);
     if (tmp != 0xE0) { printf("FAIL: csrw\n"); ok = 0; }
     asm volatile("csrw 0x003, %0" : : "r"(old));
 
     asm volatile("csrwi 0x003, 0x10");
     asm volatile("csrr %0, 0x003" : "=r"(tmp));
-    //printf("csrwi: wrote 0x10 got %x\n", (unsigned)tmp);
+    printf("csrwi: wrote 0x10 got %x\n", (unsigned)tmp);
     if (tmp != 0x10) { printf("FAIL: csrwi\n"); ok = 0; }
     asm volatile("csrw 0x003, %0" : : "r"(old));
 
     asm volatile("csrsi 0x003, 0x03");
     asm volatile("csrr %0, 0x003" : "=r"(tmp));
-    //printf("csrsi: old|3=%x\n", (unsigned)tmp);
+    printf("csrsi: old|3=%x\n", (unsigned)tmp);
     if ((old | 0x03) != tmp) { printf("FAIL: csrsi\n"); ok = 0; }
     asm volatile("csrw 0x003, %0" : : "r"(old));
 
     asm volatile("csrci 0x003, 0x03");
     asm volatile("csrr %0, 0x003" : "=r"(tmp));
-    //printf("csrci: old&~3=%x\n", (unsigned)tmp);
+    printf("csrci: old&~3=%x\n", (unsigned)tmp);
     if ((old & ~0x03) != tmp) { printf("FAIL: csrci\n"); ok = 0; }
     asm volatile("csrw 0x003, %0" : : "r"(old));
 
@@ -297,34 +297,30 @@ int fp_cmp_cvt_main(void)
 
 int amo_main(void)
 {
-    /* AMO base (all funct5 now match GNU as) */
-    asm volatile("amoadd.w a0, a1, (sp)");
-    asm volatile("amoswap.w a0, a1, (sp)");
-    asm volatile("amoand.w a0, a1, (sp)");
-    asm volatile("amoor.d a0, a1, (sp)");
-    asm volatile("amoxor.w a0, a1, (sp)");
-    asm volatile("amomax.w a0, a1, (sp)");
-    asm volatile("amomaxu.d a0, a1, (sp)");
-    asm volatile("amomin.w a0, a1, (sp)");
-    asm volatile("amominu.d a0, a1, (sp)");
-
-    /* AMO aq/rl ordering suffixes */
-    asm volatile("amoadd.w.aq a0, a1, (sp)");
-    asm volatile("amoadd.w.rl a0, a1, (sp)");
-    asm volatile("amoadd.d.aqrl a0, a1, (sp)");
-
+    int x = 0, r;
+    long long xd = 0xCAFEBABECAFEBABELL, rd, val = 0xDEADBEEFDEADBEEFLL;
+    asm("amoadd.w %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amoswap.w %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amoand.w %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amoor.d %0, %2, (%1)" : "=r"(rd) : "r"(&xd), "r"(val));
+    asm("amoxor.w %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amomax.w %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amomaxu.d %0, %2, (%1)" : "=r"(rd) : "r"(&xd), "r"(val));
+    asm("amomin.w %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amominu.d %0, %2, (%1)" : "=r"(rd) : "r"(&xd), "r"(val));
+    asm("amoadd.w.aq %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amoadd.w.rl %0, %2, (%1)" : "=r"(r) : "r"(&x), "r"(val));
+    asm("amoadd.d.aqrl %0, %2, (%1)" : "=r"(rd) : "r"(&xd), "r"(val));
     return 1;
 }
 
 int fcvt_round_main(void)
 {
-    /* fcvt with optional rounding mode operand (GNU as syntax) */
     asm volatile("fcvt.w.s a0, fa0, rne");
     asm volatile("fcvt.w.s a0, fa0, rtz");
     asm volatile("fcvt.w.s a0, fa0, rup");
     asm volatile("fcvt.w.d a0, fa0, rne");
     asm volatile("fcvt.w.d a0, fa0, rtz");
-
     return 1;
 }
 
@@ -336,7 +332,7 @@ int main()
     ok &= test_farith();
     ok &= csr_pseudo_main();
     ok &= fp_cmp_cvt_main();
-    //ok &= amo_main(); //crash on qemu
+    ok &= amo_main();
     ok &= fcvt_round_main();
     printf("%s\n", ok ? "PASS" : "FAIL");
     return !ok;

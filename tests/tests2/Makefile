@@ -135,7 +135,7 @@ endif
 128_run_atexit.test: FLAGS += -dt
 132_bound_test.test: FLAGS += -b
 140_arm64_extasm.test: GEN = $(GEN-TCC)
-141_riscv_asm.test: FLAGS += -bt
+141_riscv_asm.test: GEN = $(GEN-TCC)
 
 # Filter source directory in warnings/errors (out-of-tree builds)
 FILTER = 2>&1 | sed -e 's,$(SRC)/,,g'
