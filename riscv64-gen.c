@@ -1456,4 +1456,12 @@ ST_FUNC void gen_vla_alloc(CType *type, int align)
     }
 #endif
 }
+
+ST_FUNC void gen_clear_cache(void)
+{
+    /* Zifencei extension: fence + fence.i for I/D synchronization.
+       Required by RISC-V Linux ABI, present on all Linux-capable cores. */
+    o(0x0ff0000f); // fence iorw, iorw
+    o(0x0000100f); // fence.i
+}
 #endif

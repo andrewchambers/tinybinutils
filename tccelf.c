@@ -2857,14 +2857,15 @@ static void create_riscv_attribute_section(TCCState *s1)
 {
     static const unsigned char riscv_attr[] = {
         0x41,                           /* 'A' */
-        0x3c, 0x00, 0x00, 0x00,         /* total_len = 60 */
+        0x49, 0x00, 0x00, 0x00,         /* total_len = 73 */
         'r', 'i', 's', 'c', 'v', 0x00,  /* "riscv\0" */
-        0x2d, 0x00, 0x00, 0x00,         /* file_len = 45 */
+        0x3a, 0x00, 0x00, 0x00,         /* file_len = 58 */
         0x05,                           /* Tag_RISCV_arch */
-        0x28, 0x00, 0x00, 0x00,         /* isa_len = 40 */
+        0x35, 0x00, 0x00, 0x00,         /* isa_len = 53 */
         'r','v','6','4','i','2','p','1','_','m','2','p','0','_',
         'a','2','p','1','_','f','2','p','2','_','d','2','p','2','_',
-        'c','2','p','0','_','z','i','c','s','r','2','p','0', 0x00,
+        'c','2','p','0','_','z','i','c','s','r','2','p','0','_',
+        'z','i','f','e','n','c','e','i','2','p','0', 0x00,
     };
     Section *attr = new_section(s1, ".riscv.attributes", SHT_RISCV_ATTRIBUTES, 0);
     unsigned char *ptr = section_ptr_add(attr, sizeof(riscv_attr));
