@@ -1462,6 +1462,103 @@ static void asm_atomic_opcode(TCCState *s1, int token)
             asm_emit_a(token, 0x2F | 0x3<<12 | 0x0<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
         case TOK_ASM_amoadd_d_aqrl:
             asm_emit_a(token, 0x2F | 0x3<<12 | 0x0<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+
+        case TOK_ASM_amoswap_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x1<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoswap_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x1<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoswap_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x1<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoswap_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x1<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoswap_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x1<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoswap_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x1<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoand_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0xc<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoand_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0xc<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoand_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0xc<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoand_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0xc<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoand_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0xc<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoand_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0xc<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoor_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x8<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoor_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x8<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoor_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x8<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoor_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x8<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoor_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x8<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoor_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x8<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoxor_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x4<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoxor_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x4<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoxor_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x4<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amoxor_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x4<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amoxor_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x4<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amoxor_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x4<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amomax_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x14<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amomax_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x14<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amomax_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x14<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amomax_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x14<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amomax_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x14<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amomax_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x14<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amomaxu_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x1c<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amomaxu_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x1c<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amomaxu_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x1c<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amomaxu_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x1c<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amomaxu_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x1c<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amomaxu_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x1c<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amomin_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x10<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amomin_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x10<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amomin_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x10<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amomin_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x10<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amomin_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x10<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amomin_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x10<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amominu_w_aq:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x18<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amominu_w_rl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x18<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amominu_w_aqrl:
+            asm_emit_a(token, 0x2F | 2<<12 | 0x18<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
+        case TOK_ASM_amominu_d_aq:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x18<<27, &ops[0], &ops[1], &ops[2], 1, 0); break;
+        case TOK_ASM_amominu_d_rl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x18<<27, &ops[0], &ops[1], &ops[2], 0, 1); break;
+        case TOK_ASM_amominu_d_aqrl:
+            asm_emit_a(token, 0x2F | 3<<12 | 0x18<<27, &ops[0], &ops[1], &ops[2], 1, 1); break;
     }
 }
 
@@ -1948,6 +2045,55 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_amoadd_d_aq:
     case TOK_ASM_amoadd_d_rl:
     case TOK_ASM_amoadd_d_aqrl:
+    /* AMO aq/rl (all ops) */
+    case TOK_ASM_amoswap_w_aq:
+    case TOK_ASM_amoswap_w_rl:
+    case TOK_ASM_amoswap_w_aqrl:
+    case TOK_ASM_amoswap_d_aq:
+    case TOK_ASM_amoswap_d_rl:
+    case TOK_ASM_amoswap_d_aqrl:
+    case TOK_ASM_amoand_w_aq:
+    case TOK_ASM_amoand_w_rl:
+    case TOK_ASM_amoand_w_aqrl:
+    case TOK_ASM_amoand_d_aq:
+    case TOK_ASM_amoand_d_rl:
+    case TOK_ASM_amoand_d_aqrl:
+    case TOK_ASM_amoor_w_aq:
+    case TOK_ASM_amoor_w_rl:
+    case TOK_ASM_amoor_w_aqrl:
+    case TOK_ASM_amoor_d_aq:
+    case TOK_ASM_amoor_d_rl:
+    case TOK_ASM_amoor_d_aqrl:
+    case TOK_ASM_amoxor_w_aq:
+    case TOK_ASM_amoxor_w_rl:
+    case TOK_ASM_amoxor_w_aqrl:
+    case TOK_ASM_amoxor_d_aq:
+    case TOK_ASM_amoxor_d_rl:
+    case TOK_ASM_amoxor_d_aqrl:
+    case TOK_ASM_amomax_w_aq:
+    case TOK_ASM_amomax_w_rl:
+    case TOK_ASM_amomax_w_aqrl:
+    case TOK_ASM_amomax_d_aq:
+    case TOK_ASM_amomax_d_rl:
+    case TOK_ASM_amomax_d_aqrl:
+    case TOK_ASM_amomaxu_w_aq:
+    case TOK_ASM_amomaxu_w_rl:
+    case TOK_ASM_amomaxu_w_aqrl:
+    case TOK_ASM_amomaxu_d_aq:
+    case TOK_ASM_amomaxu_d_rl:
+    case TOK_ASM_amomaxu_d_aqrl:
+    case TOK_ASM_amomin_w_aq:
+    case TOK_ASM_amomin_w_rl:
+    case TOK_ASM_amomin_w_aqrl:
+    case TOK_ASM_amomin_d_aq:
+    case TOK_ASM_amomin_d_rl:
+    case TOK_ASM_amomin_d_aqrl:
+    case TOK_ASM_amominu_w_aq:
+    case TOK_ASM_amominu_w_rl:
+    case TOK_ASM_amominu_w_aqrl:
+    case TOK_ASM_amominu_d_aq:
+    case TOK_ASM_amominu_d_rl:
+    case TOK_ASM_amominu_d_aqrl:
 asm_atomic_opcode(s1, token);
         break;
 
