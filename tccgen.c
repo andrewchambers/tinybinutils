@@ -3278,7 +3278,6 @@ again:
         dbt_bt = dbt & VT_BTYPE;
         sbt_bt = sbt & VT_BTYPE;
         if (dbt_bt == VT_VOID) {
-            vtop->r = vtop->r2 = VT_CONST;
             goto done;
         }
         if (sbt_bt == VT_VOID) {
