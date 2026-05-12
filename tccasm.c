@@ -53,49 +53,17 @@ ST_FUNC int asm_get_local_label_name(TCCState *s1, unsigned int n)
     return asm_get_prefix_name(s1, "L..", n);
 }
 
-/* If a C name has an _ prepended then only asm labels that start
-   with _ are representable in C, by removing the first _.  ASM names
-   without _ at the beginning don't correspond to C names, but we use
-   the global C symbol table to track ASM names as well, so we need to
-   transform those into ones that don't conflict with a C name,
-   so prepend a '.' for them, but force the ELF asm name to be set.  */
-static int asm2cname(int v, int *addeddot)
-{
-    const char *name;
-    *addeddot = 0;
-    if (!tcc_state->leading_underscore)
-      return v;
-    name = get_tok_str(v, NULL);
-    if (!name)
-      return v;
-    if (name[0] == '_') {
-        v = tok_alloc_const(name + 1);
-    } else if (!strchr(name, '.')) {
-        char newname[256];
-        snprintf(newname, sizeof newname, ".%s", name);
-        v = tok_alloc_const(newname);
-        *addeddot = 1;
-    }
-    return v;
-}
-
 static Sym *asm_label_find(int v)
 {
-    int addeddot;
-    v = asm2cname(v, &addeddot);
     return sym_find(v);
 }
 
 static Sym *asm_label_push(int v)
 {
-    int addeddot, v2 = asm2cname(v, &addeddot);
     /* We always add VT_EXTERN, for sym definition that's tentative
        (for .set, removed for real defs), for mere references it's correct
        as is.  */
-    Sym *sym = global_identifier_push(v2, VT_ASM | VT_EXTERN | VT_STATIC, 0);
-    if (addeddot)
-        sym->asm_label = v;
-    return sym;
+    return global_identifier_push(v, VT_ASM | VT_EXTERN | VT_STATIC, 0);
 }
 
 /* Return a symbol we can use inside the assembler, having name NAME.
@@ -443,7 +411,7 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
         sym = asm_label_push(label);
     }
     if (!sym->c)
-      put_extern_sym2(sym, SHN_UNDEF, 0, 0, 1);
+      put_extern_sym2(sym, SHN_UNDEF, 0, 0);
     esym = elfsym(sym);
     esym->st_shndx = sh_num;
     esym->st_value = value;
@@ -505,6 +473,20 @@ static void pop_section(TCCState *s1)
         tcc_error(".popsection without .pushsection");
     cur_text_section->prev = NULL;
     use_section1(s1, prev);
+}
+
+static int strstart(const char *str, const char *val)
+{
+    while (*val) {
+        if (*str++ != *val++)
+            return 0;
+    }
+    return 1;
+}
+
+static int is_debug_section_name(const char *name)
+{
+    return strstart(name, ".debug_") || strstart(name, ".zdebug_");
 }
 
 static void asm_parse_directive(TCCState *s1, int global)
@@ -779,7 +761,7 @@ static void asm_parse_directive(TCCState *s1, int global)
                 pstrcat(ident, sizeof(ident), tokc.str.data);
             else
                 pstrcat(ident, sizeof(ident), get_tok_str(tok, &tokc));
-            tcc_warning_c(warn_unsupported)("ignoring .ident %s", ident);
+            tcc_warning("ignoring .ident %s", ident);
             next();
         }
         break;
@@ -795,7 +777,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             if (!sym)
                 tcc_error("label not found: %s", get_tok_str(tok, NULL));
             /* XXX .size name,label2-label1 */
-            tcc_warning_c(warn_unsupported)("ignoring .size %s,*", get_tok_str(tok, NULL));
+            tcc_warning("ignoring .size %s,*", get_tok_str(tok, NULL));
             next();
             skip(',');
             n = asm_int_expr(s1);
@@ -838,7 +820,7 @@ static void asm_parse_directive(TCCState *s1, int global)
                 st_type = STT_OBJECT;
                 goto set_st_type;
             } else
-                tcc_warning_c(warn_unsupported)("change type of '%s' from 0x%x to '%s' ignored",
+                tcc_warning("change type of '%s' from 0x%x to '%s' ignored",
                     get_tok_str(sym->v, NULL), sym->type.t, newtype);
 
             next();
@@ -848,10 +830,11 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_section:
         {
             char sname[256];
-	    int old_nb_section = s1->nb_sections;
-            int flags = SHF_ALLOC;
+            int old_nb_section = s1->nb_sections;
+            int flags;
+            int have_flags = 0;
 
-	    tok1 = tok;
+            tok1 = tok;
             /* XXX: support more options */
             next();
             sname[0] = '\0';
@@ -862,13 +845,18 @@ static void asm_parse_directive(TCCState *s1, int global)
                     pstrcat(sname, sizeof(sname), get_tok_str(tok, NULL));
                 next();
             }
+            flags = is_debug_section_name(sname) ? 0 : SHF_ALLOC;
             if (tok == ',') {
                 const char *p;
                 /* skip section options */
                 next();
                 if (tok != TOK_STR)
                     expect("string constant");
+                flags = 0;
+                have_flags = 1;
                 for (p = tokc.str.data; *p; ++p) {
+                    if (*p == 'a')
+                        flags |= SHF_ALLOC;
                     if (*p == 'w')
                         flags |= SHF_WRITE;
                     if (*p == 'x')
@@ -883,20 +871,20 @@ static void asm_parse_directive(TCCState *s1, int global)
                 }
             }
             last_text_section = cur_text_section;
-	    if (tok1 == TOK_ASMDIR_section)
-	        use_section(s1, sname);
-	    else
-	        push_section(s1, sname);
-	    /* If we just allocated a new section reset its alignment to
-	       1.  new_section normally acts for GCC compatibility and
-	       sets alignment to PTR_SIZE.  The assembler behaves different. */
-	    if (old_nb_section != s1->nb_sections) {
-	        cur_text_section->sh_addralign = 1;
+            if (tok1 == TOK_ASMDIR_section)
+                use_section(s1, sname);
+            else
+                push_section(s1, sname);
+            /* If we just allocated a new section reset its alignment to
+               1.  new_section normally acts for GCC compatibility and
+               sets alignment to PTR_SIZE.  The assembler behaves different. */
+            if (old_nb_section != s1->nb_sections) {
+                cur_text_section->sh_addralign = 1;
                 /* Make .init and .fini sections executable by default.
                    GAS does so, too, and musl relies on it. */
-                if (!strcmp(sname, ".init") || !strcmp(sname, ".fini"))
+                if (!have_flags && (!strcmp(sname, ".init") || !strcmp(sname, ".fini")))
                     flags |= SHF_EXECINSTR;
-	        cur_text_section->sh_flags = flags;
+                cur_text_section->sh_flags = flags;
             }
         }
         break;
@@ -1012,7 +1000,6 @@ static int tcc_assemble_internal(TCCState *s1, int global)
         next();
         if (tok == TOK_EOF)
             break;
-        tcc_debug_line(s1);
         parse_flags |= PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
     redo:
 #if !defined(TCC_TARGET_ARM64)
@@ -1066,13 +1053,11 @@ static int tcc_assemble_internal(TCCState *s1, int global)
 ST_FUNC int tcc_assemble(TCCState *s1)
 {
     int ret;
-    tcc_debug_start(s1);
     /* default section is text */
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
     ret = tcc_assemble_internal(s1, 1);
     cur_text_section->data_offset = ind;
-    tcc_debug_end(s1);
     return ret;
 }

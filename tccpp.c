@@ -1166,18 +1166,12 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
             case 'v':
                 c = '\v';
                 break;
-            case 'e':
-                if (!gnu_ext)
-                    goto invalid_escape;
-                c = 27;
-                break;
             case '\'':
             case '\"':
             case '\\': 
             case '?':
                 break;
             default:
-            invalid_escape:
                 if (c >= '!' && c <= '~')
                     tcc_warning("unknown escape sequence: \'\\%c\'", c);
                 else
@@ -1284,7 +1278,7 @@ static void parse_string(const char *s, int len)
         if (n < 1)
             tcc_error("empty character constant");
         if (n > 1)
-            tcc_warning_c(warn_all)("multi-character character constant");
+            tcc_warning("multi-character character constant");
         for (c = i = 0; i < n; ++i) {
             if (is_long)
                 c = ((nwchar_t *)tokcstr.data)[i];

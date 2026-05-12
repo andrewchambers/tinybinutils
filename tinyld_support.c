@@ -211,7 +211,6 @@ TinyLDState *tinyld_new(void)
 
     s->tool_name = "tinyld";
     s->output_type = TCC_OUTPUT_EXE;
-    s->nostdlib = 1;
     tccelf_new(s);
     return s;
 }
@@ -270,12 +269,16 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
             return tcc_error_noabort("file '%s' not found", filename);
         return FILE_NOT_FOUND;
     }
-    return tinyld_add_binary(s1, flags | AFF_TYPE_BIN, filename, fd);
+    return tinyld_add_binary(s1, flags, filename, fd);
 }
 
 int tinyld_add_file(TinyLDState *s, const char *filename)
 {
-    return tcc_add_file_internal(s, filename, s->filetype | AFF_PRINT_ERROR);
+    int flags = AFF_PRINT_ERROR;
+
+    if (s->whole_archive)
+        flags |= AFF_WHOLE_ARCHIVE;
+    return tcc_add_file_internal(s, filename, flags);
 }
 
 static int tinyld_add_library_internal(TCCState *s1, const char *fmt,
@@ -294,17 +297,13 @@ static int tinyld_add_library_internal(TCCState *s1, const char *fmt,
     return FILE_NOT_FOUND;
 }
 
-ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags)
-{
-    return tinyld_add_library_internal(s, "%s/%s", filename, flags);
-}
-
 int tinyld_add_library(TinyLDState *s, const char *library_name)
 {
-    int flags = AFF_TYPE_LIB | (s->filetype & AFF_WHOLE_ARCHIVE);
+    int flags = s->whole_archive ? AFF_WHOLE_ARCHIVE : 0;
 
     if (library_name[0] == ':')
-        return tcc_add_dll(s, library_name + 1, flags | AFF_PRINT_ERROR);
+        return tinyld_add_library_internal(s, "%s/%s", library_name + 1,
+                                           flags | AFF_PRINT_ERROR);
     return tinyld_add_library_internal(s, "%s/lib%s.a", library_name,
                                        flags | AFF_PRINT_ERROR);
 }

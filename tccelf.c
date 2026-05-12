@@ -364,18 +364,12 @@ ST_FUNC int find_elf_sym(Section *s, const char *name)
     return 0;
 }
 
-/* return elf symbol value, signal error if 'err' is nonzero, decorate
-   name if FORC */
-ST_FUNC addr_t get_sym_addr(TCCState *s1, const char *name, int err, int forc)
+/* return elf symbol value, signal error if 'err' is nonzero */
+ST_FUNC addr_t get_sym_addr(TCCState *s1, const char *name, int err)
 {
     int sym_index;
     ElfW(Sym) *sym;
-    char buf[256];
-    if (forc && s1->leading_underscore) {
-        buf[0] = '_';
-        pstrcpy(buf + 1, sizeof(buf) - 1, name);
-        name = buf;
-    }
+
     sym_index = find_elf_sym(s1->symtab, name);
     sym = &((ElfW(Sym) *)s1->symtab->data)[sym_index];
     if (!sym_index || sym->st_shndx == SHN_UNDEF) {
@@ -638,7 +632,6 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
     int type, sym_index;
     unsigned char *ptr;
     addr_t tgt, addr;
-    int is_dwarf = s->sh_num >= s1->dwlo && s->sh_num < s1->dwhi;
 
     qrel = (ElfW_Rel *)sr->data;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
@@ -652,12 +645,6 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
 #if SHT_RELX == SHT_RELA
         tgt += rel->r_addend;
 #endif
-        if (is_dwarf && type == R_DATA_32DW
-            && sym->st_shndx >= s1->dwlo && sym->st_shndx < s1->dwhi) {
-            /* dwarf section relocation to each other */
-            add32le(ptr, tgt - s1->sections[sym->st_shndx]->sh_addr);
-            continue;
-        }
         addr = s->sh_addr + rel->r_offset;
         relocate(s1, rel, type, ptr, addr, tgt);
     }
@@ -986,6 +973,20 @@ ST_FUNC void fill_got(TCCState *s1)
     }
 }
 
+static int strstart(const char *str, const char *val)
+{
+    while (*val) {
+        if (*str++ != *val++)
+            return 0;
+    }
+    return 1;
+}
+
+static int is_debug_section_name(const char *name)
+{
+    return strstart(name, ".debug_") || strstart(name, ".zdebug_");
+}
+
 /* decide if an unallocated section should be output. */
 static void set_sec_sizes(TCCState *s1)
 {
@@ -995,7 +996,7 @@ static void set_sec_sizes(TCCState *s1)
     /* Allocate strings for section names */
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
-        if ((s->sh_flags & SHF_ALLOC) || s1->do_debug) {
+        if ((s->sh_flags & SHF_ALLOC) || is_debug_section_name(s->name)) {
             s->sh_size = s->data_offset;
         }
     }
@@ -1281,9 +1282,9 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
     } else {
         ehdr.e_type = ET_EXEC;
         if (s1->elf_entryname)
-            ehdr.e_entry = get_sym_addr(s1, s1->elf_entryname, 1, 0);
+            ehdr.e_entry = get_sym_addr(s1, s1->elf_entryname, 1);
         else
-            ehdr.e_entry = get_sym_addr(s1, "_start", 1, 0);
+            ehdr.e_entry = get_sym_addr(s1, "_start", 1);
         if (ehdr.e_entry == (addr_t)-1)
             ehdr.e_entry = text_section->sh_addr;
         if (s1->nb_errors)
@@ -1358,8 +1359,6 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode);
     if (fd < 0 || (f = fdopen(fd, "wb")) == NULL)
         return tcc_error_noabort("could not write '%s: %s'", filename, strerror(errno));
-    if (s1->verbose)
-        printf("<- %s\n", filename);
     ret = tcc_output_elf(s1, f, phnum, phdr);
     fclose(f);
 
@@ -1563,16 +1562,14 @@ ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h)
 }
 
 /* load an object file and merge it with current files */
-/* XXX: handle correctly stab (debug) info */
 ST_FUNC int tcc_load_object_file(TCCState *s1,
-                                int fd, unsigned long file_offset)
+                                 int fd, unsigned long file_offset)
 {
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) *shdr, *sh;
     unsigned long size, offset, offseti;
-    int i, j, nb_syms, sym_index, ret, seencompressed;
+    int i, j, nb_syms, sym_index, ret;
     char *strsec, *strtab;
-    int stab_index, stabstr_index;
     int *old_to_new_syms;
     char *sh_name, *name;
     SectionMergeInfo *sm_table, *sm;
@@ -1603,8 +1600,6 @@ invalid:
     symtab = NULL;
     strtab = NULL;
     nb_syms = 0;
-    seencompressed = 0;
-    stab_index = stabstr_index = 0;
     ret = -1;
 
     for(i = 1; i < ehdr.e_shnum; i++) {
@@ -1622,8 +1617,6 @@ invalid:
             sh = &shdr[sh->sh_link];
             strtab = load_data(fd, file_offset + sh->sh_offset, sh->sh_size);
         }
-	if (sh->sh_flags & SHF_COMPRESSED)
-	    seencompressed = 1;
     }
 
     /* now examine each section and try to merge its content with the
@@ -1637,14 +1630,8 @@ invalid:
 	  sh = &shdr[sh->sh_info];
         /* ignore sections types we do not handle (plus relocs to those) */
         sh_name = strsec + sh->sh_name;
-        if (0 == strncmp(sh_name, ".debug_", 7)
-         || 0 == strncmp(sh_name, ".stab", 5)) {
-	    if (!s1->do_debug || seencompressed)
-	        continue;
-        } else if (0 == strncmp(sh_name, ".eh_frame", 9)) {
-            if (NULL == eh_frame_section)
-                continue;
-        } else
+        if (sh->sh_flags & SHF_COMPRESSED)
+            continue;
         if (sh->sh_type != SHT_PROGBITS &&
             sh->sh_type != SHT_NOTE &&
             sh->sh_type != SHT_NOBITS &&
@@ -1664,7 +1651,6 @@ invalid:
             if (strcmp(s->name, sh_name))
                 continue;
             if ((int)sh->sh_type != s->sh_type
-                && strcmp (s->name, ".eh_frame")
                 /* some crt1.o seem to have two ".note.GNU-stack" (SHT_NOTE & SHT_PROGBITS) */
                 && strcmp (s->name, ".note.GNU-stack")
                 ) {
@@ -1678,12 +1664,6 @@ invalid:
                    it. */
                 sm_table[i].link_once = 1;
                 goto next;
-            }
-            if (stab_section) {
-                if (s == stab_section)
-                    stab_index = i;
-                if (s == stab_section->link)
-                    stabstr_index = i;
             }
             goto found;
         }
@@ -1716,21 +1696,6 @@ invalid:
             section_add(s, 0, 4);
 #endif
     next: ;
-    }
-
-    /* gr relocate stab strings */
-    if (stab_index && stabstr_index) {
-        Stab_Sym *a, *b;
-        unsigned o;
-        s = sm_table[stab_index].s;
-        a = (Stab_Sym *)(s->data + sm_table[stab_index].offset);
-        b = (Stab_Sym *)(s->data + s->data_offset);
-        o = sm_table[stabstr_index].offset;
-        while (a < b) {
-            if (a->n_strx)
-                a->n_strx += o;
-            a++;
-        }
     }
 
     /* second short pass to update sh_link and sh_info fields of new
@@ -1919,8 +1884,6 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
                 goto the_end;
             }
             off += len;
-            if (s1->verbose == 2)
-                printf("   -> %s\n", hdr.ar_name);
             if (tcc_load_object_file(s1, fd, off) < 0)
                 goto the_end;
             ++bound;
@@ -1960,8 +1923,6 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
             if (!strcmp(hdr.ar_name, "/SYM64/"))
                 return tcc_load_alacarte(s1, fd, size, 8);
         } else if (tcc_object_type(fd, &ehdr) == AFF_BINTYPE_REL) {
-            if (s1->verbose == 2)
-                printf("   -> %s\n", hdr.ar_name);
             if (tcc_load_object_file(s1, fd, file_offset) < 0)
                 return -1;
         }

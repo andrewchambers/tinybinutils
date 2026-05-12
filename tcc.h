@@ -248,10 +248,7 @@ typedef struct Sym {
     int c; /* Elf symbol index */
 
     CType type; /* associated type */
-    union {
-        struct Sym *next; /* free-list link */
-        int asm_label; /* associated asm label */
-    };
+    struct Sym *next; /* free-list link */
     struct Sym *prev_tok; /* previous symbol for this token */
 } Sym;
 
@@ -319,13 +316,6 @@ typedef struct TokenString {
     char alloc;
 } TokenString;
 
-/* inline functions */
-typedef struct InlineFunc {
-    TokenString *func_str;
-    Sym *sym;
-    char filename[1];
-} InlineFunc;
-
 typedef struct ExprValue {
     uint64_t v;
     Sym *sym;
@@ -341,36 +331,7 @@ struct sym_attr {
 };
 
 struct TCCState {
-    unsigned char verbose; /* if true, display some information during compilation */
-    unsigned char nostdlib; /* if true, no standard libraries are added */
-    unsigned char filetype; /* file type for compilation (NONE,C,ASM) */
-
-    /* C language options */
-    unsigned char leading_underscore;
-    unsigned char ms_extensions; /* allow nested named struct w/o identifier behave like unnamed */
-    unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
-    unsigned char reverse_funcargs; /* if true, evaluate last function arg first */
-    unsigned char gnu89_inline; /* treat 'extern inline' like 'static inline' */
-    unsigned char unwind_tables; /* create eh_frame section */
-
-    /* warning switches */
-    unsigned char warn_none;
-    unsigned char warn_all;
-    unsigned char warn_error;
-    unsigned char warn_write_strings;
-    unsigned char warn_unsupported;
-    unsigned char warn_implicit_function_declaration;
-    unsigned char warn_discarded_qualifiers;
-    #define WARN_ON  1 /* warning is on (-Woption) */
-    unsigned char warn_num; /* temp var for tcc_warning_c() */
-
-    /* compile with debug symbol (and use them if error during execution) */
-    unsigned char do_debug;
-
-    /* use GNU C extensions */
-    unsigned char gnu_ext;
-
-    unsigned char nosse; /* For -mno-sse support. */
+    unsigned char whole_archive;
 
     unsigned char has_text_addr;
     addr_t text_addr; /* address of text section */
@@ -391,11 +352,6 @@ struct TCCState {
     jmp_buf error_jmp_buf;
     int nb_errors;
 
-    /* inline functions are stored as token lists and compiled last
-       only if referenced */
-    struct InlineFunc **inline_fns;
-    int nb_inline_fns;
-
     /* sections */
     Section **sections;
     int nb_sections; /* number of sections, including first dummy section */
@@ -409,29 +365,8 @@ struct TCCState {
     Section *cur_text_section; /* current section where function code is generated */
     /* symbol section */
     union { Section *symtab_section, *symtab; }; /* historical alias */
-    /* temporary dynamic symbol sections (for dll loading) */
-    Section *dynsymtab_section;
-    /* exported dynamic symbol section */
-    Section *dynsym;
     /* got & plt handling */
     Section *got, *plt;
-    /* exception handling */
-    Section *eh_frame_section;
-    Section *eh_frame_hdr_section;
-    unsigned long eh_start;
-    /* debug sections */
-    Section *stab_section;
-    Section *dwarf_info_section;
-    Section *dwarf_abbrev_section;
-    Section *dwarf_line_section;
-    Section *dwarf_aranges_section;
-    Section *dwarf_str_section;
-    Section *dwarf_line_str_section;
-    int dwlo, dwhi; /* dwarf section range */
-    /* test coverage */
-    Section *tcov_section;
-    /* debug state */
-    struct _tccdbg *dState;
 
     /* extra attributes (eg. GOT/PLT value) for symtab symbols */
     struct sym_attr *sym_attrs;
@@ -633,7 +568,6 @@ enum tcc_token {
 /* ------------ libtcc.c ------------ */
 
 ST_DATA struct TCCState *tcc_state;
-ST_DATA const char * const target_machine_defs;
 
 /* public functions currently used by the tcc main function */
 ST_FUNC char *pstrcpy(char *buf, size_t buf_size, const char *s);
@@ -693,25 +627,15 @@ ST_FUNC void tcc_close(void);
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
 /* flags: */
 #define AFF_PRINT_ERROR     0x10 /* print error if file not found */
-#define AFF_REFERENCED_DLL  0x20 /* load a referenced dll from another dll */
-#define AFF_TYPE_BIN        0x40 /* file to add is binary */
 #define AFF_WHOLE_ARCHIVE   0x80 /* load all objects from archive */
-/* s->filetype: */
-#define AFF_TYPE_NONE   0
-#define AFF_TYPE_C      1
-#define AFF_TYPE_ASM    2
-#define AFF_TYPE_LIB    8
-#define AFF_TYPE_MASK   (7 | AFF_TYPE_BIN)
 /* values from tcc_object_type(...) */
 #define AFF_BINTYPE_REL 1
 #define AFF_BINTYPE_DYN 2
 #define AFF_BINTYPE_AR  3
-#define AFF_BINTYPE_C67 4
 
 /* return value of tcc_add_file_internal(): 0, -1, or FILE_NOT_FOUND */
 #define FILE_NOT_FOUND -2
 
-ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC int tcc_add_library(TCCState *s, const char *libraryname);
 #define tcc_fopen fopen
 #define tcc_fclose fclose
@@ -787,21 +711,12 @@ static inline int toup(int c) {
 
 #define SYM_POOL_NB (8192 / sizeof(Sym))
 
-ST_DATA CType int_type, func_old_type, char_pointer_type;
-ST_DATA int rsym, anon_sym, ind, loc;
-ST_DATA char debug_modes;
-
+ST_DATA int ind;
 ST_DATA int nocode_wanted; /* true if no code generation wanted for an expression */
-ST_DATA int global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
-ST_DATA CType func_vt; /* current function return type (used by return instruction) */
-ST_DATA int func_var; /* true if current function is variadic */
-ST_DATA int func_vc; /* stack address for implicit struct return storage */
-ST_DATA int func_ind; /* function start address */
-ST_DATA const char *funcname;
 
 ST_FUNC ElfSym *elfsym(Sym *);
 ST_FUNC void update_storage(Sym *sym);
-ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long size, int can_add_underscore);
+ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long size);
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
 ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
 
@@ -820,9 +735,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode);
 ST_FUNC int asm_parse_regvar(int t);
 
 /* ------------ tinyas support ------------ */
-ST_FUNC void tcc_debug_start(TCCState *s1);
-ST_FUNC void tcc_debug_line(TCCState *s1);
-ST_FUNC void tcc_debug_end(TCCState *s1);
 ST_FUNC void g(int c);
 ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
@@ -835,14 +747,6 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
 /* ------------ tccelf.c ------------ */
 
 #define ARMAG  "!<arch>\n"    /* For COFF and a.out archives */
-
-typedef struct {
-    unsigned int n_strx;         /* index into string table of name */
-    unsigned char n_type;         /* type of symbol */
-    unsigned char n_other;        /* misc info (usually empty) */
-    unsigned short n_desc;        /* description field */
-    unsigned int n_value;        /* value of symbol */
-} Stab_Sym;
 
 ST_FUNC void tccelf_new(TCCState *s);
 ST_FUNC void tccelf_delete(TCCState *s);
@@ -872,7 +776,7 @@ ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
-ST_FUNC addr_t get_sym_addr(TCCState *s, const char *name, int err, int forc);
+ST_FUNC addr_t get_sym_addr(TCCState *s, const char *name, int err);
 ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs);
 
 /* Browse each elem of type <type> in section <sec> starting at elem <startoff>
@@ -928,23 +832,6 @@ static inline void add64le(unsigned char *p, int64_t x) {
 
 #define ST_ASM_SET 0x04
 
-#define stab_section            s1->stab_section
-#define stabstr_section         stab_section->link
-#define eh_frame_section        s1->eh_frame_section
-#define eh_frame_hdr_section    s1->eh_frame_hdr_section
-#define dwarf_info_section      s1->dwarf_info_section
-#define dwarf_abbrev_section    s1->dwarf_abbrev_section
-#define dwarf_line_section      s1->dwarf_line_section
-#define dwarf_aranges_section   s1->dwarf_aranges_section
-#define dwarf_str_section       s1->dwarf_str_section
-#define dwarf_line_str_section  s1->dwarf_line_str_section
-
-#if defined TCC_TARGET_X86_64
-# define R_DATA_32DW R_X86_64_32
-#else
-# define R_DATA_32DW R_DATA_32
-#endif
-
 #define TCC_SEM(s)
 #define WAIT_SEM(p)
 #define POST_SEM(p)
@@ -965,7 +852,6 @@ static inline void add64le(unsigned char *p, int64_t x) {
 #define common_section      TCC_STATE_VAR(common_section)
 #define cur_text_section    TCC_STATE_VAR(cur_text_section)
 #define symtab_section      TCC_STATE_VAR(symtab_section)
-#define gnu_ext             TCC_STATE_VAR(gnu_ext)
 #define tcc_error_noabort   TCC_SET_STATE(_tcc_error_noabort)
 #define tcc_error           TCC_SET_STATE(_tcc_error)
 #define tcc_warning         TCC_SET_STATE(_tcc_warning)
@@ -976,11 +862,6 @@ static inline void add64le(unsigned char *p, int64_t x) {
 
 PUB_FUNC void tcc_enter_state(TCCState *s1);
 PUB_FUNC void tcc_exit_state(TCCState *s1);
-
-/* conditional warning depending on switch */
-#define tcc_warning_c(sw) TCC_SET_STATE((\
-    tcc_state->warn_num = offsetof(TCCState, sw) \
-    - offsetof(TCCState, warn_none), _tcc_warning))
 
 /********************************************************/
 #endif /* _TCC_H */

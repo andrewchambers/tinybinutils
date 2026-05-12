@@ -3,30 +3,8 @@
 
 #undef free
 
-CType int_type, func_old_type, char_pointer_type;
-int rsym, anon_sym, ind, loc;
-char debug_modes;
+int ind;
 int nocode_wanted;
-int global_expr;
-CType func_vt;
-int func_var;
-int func_vc;
-int func_ind;
-const char *funcname;
-
-#if defined TCC_TARGET_X86_64
-const char * const target_machine_defs =
-    "__x86_64__\0"
-    "__x86_64\0"
-    "__amd64__\0";
-#elif defined TCC_TARGET_ARM64
-const char * const target_machine_defs =
-    "__aarch64__\0";
-#elif defined TCC_TARGET_RISCV64
-const char * const target_machine_defs =
-    "__riscv\0"
-    "__riscv_xlen 64\0";
-#endif
 
 static Sym *sym_free_first;
 static void **sym_pools;
@@ -169,21 +147,14 @@ ST_FUNC void update_storage(Sym *sym)
 }
 
 ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value,
-                             unsigned long size, int can_add_underscore)
+                             unsigned long size)
 {
     const char *name;
-    char buf[256];
     int type, bind, info;
     ElfSym *esym;
 
     if (!sym->c) {
-        name = sym->asm_label ? get_tok_str(sym->asm_label, NULL)
-                              : get_tok_str(sym->v, NULL);
-        if (tcc_state->leading_underscore && can_add_underscore) {
-            buf[0] = '_';
-            pstrcpy(buf + 1, sizeof(buf) - 1, name);
-            name = buf;
-        }
+        name = get_tok_str(sym->v, NULL);
         if (IS_ASM_FUNC(sym->type.t))
             type = STT_FUNC;
         else if ((sym->type.t & VT_BTYPE) == VT_VOID)
@@ -208,7 +179,7 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value,
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value,
                             unsigned long size)
 {
-    put_extern_sym2(sym, section ? section->sh_num : SHN_UNDEF, value, size, 1);
+    put_extern_sym2(sym, section ? section->sh_num : SHN_UNDEF, value, size);
 }
 
 ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
@@ -222,21 +193,6 @@ ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
         c = sym->c;
     }
     put_elf_reloca(symtab_section, s, offset, type, c, addend);
-}
-
-ST_FUNC void tcc_debug_start(TCCState *s1)
-{
-    (void)s1;
-}
-
-ST_FUNC void tcc_debug_line(TCCState *s1)
-{
-    (void)s1;
-}
-
-ST_FUNC void tcc_debug_end(TCCState *s1)
-{
-    (void)s1;
 }
 
 ST_FUNC void gen_fill_nops(int bytes)
@@ -304,7 +260,6 @@ TinyASState *tinyas_new(void)
 
     s->tool_name = "tinyas";
     s->output_type = TCC_OUTPUT_OBJ;
-    s->nostdlib = 1;
     tccelf_new(s);
     return s;
 }

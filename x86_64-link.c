@@ -199,13 +199,9 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
             break;
         case R_X86_64_32:
         case R_X86_64_32S:
-            if ((type == R_X86_64_32
+            if ((type == R_X86_64_32)
                     ? val != (uint32_t)val
-                    : (int64_t)val != (int32_t)val)
-                /* ignore relocation check for stab section */
-                && (stab_section == NULL ||
-                    addr < stab_section->sh_addr ||
-                    addr >= (stab_section->sh_addr + stab_section->data_offset))) {
+                    : (int64_t)val != (int32_t)val) {
                 tcc_error_noabort("relocation 'R_X86_64_32[S]' out of range");
             }
             add32le(ptr, val);

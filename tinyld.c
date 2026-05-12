@@ -98,9 +98,9 @@ int main(int argc, char **argv)
             }
             s->has_text_addr = 1;
         } else if (!strcmp(arg, "--whole-archive")) {
-            s->filetype |= AFF_WHOLE_ARCHIVE;
+            s->whole_archive = 1;
         } else if (!strcmp(arg, "--no-whole-archive")) {
-            s->filetype &= ~AFF_WHOLE_ARCHIVE;
+            s->whole_archive = 0;
         } else if (!strcmp(arg, "-s") || !strcmp(arg, "--strip-all")
                    || !strcmp(arg, "--strip-debug")) {
             continue;
