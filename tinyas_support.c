@@ -7,7 +7,6 @@ Sym *global_stack;
 Sym *local_stack;
 Sym *local_label_stack;
 Sym *global_label_stack;
-Sym *define_stack;
 CType int_type, func_old_type, char_pointer_type;
 SValue *vtop;
 int rsym, anon_sym, ind, loc;
@@ -44,23 +43,6 @@ void libc_free(void *ptr)
     free(ptr);
 }
 
-ST_FUNC int normalized_PATHCMP(const char *f1, const char *f2)
-{
-    char *p1, *p2;
-    int ret = 1;
-
-    p1 = realpath(f1, NULL);
-    if (p1) {
-        p2 = realpath(f2, NULL);
-        if (p2) {
-            ret = PATHCMP(p1, p2);
-            free(p2);
-        }
-        free(p1);
-    }
-    return ret;
-}
-
 ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
 {
     BufferedFile *bf;
@@ -71,14 +53,11 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     bf->buf_end = bf->buffer + initlen;
     bf->buf_end[0] = CH_EOB;
     pstrcpy(bf->filename, sizeof(bf->filename), filename);
-    bf->true_filename = bf->filename;
     bf->line_num = 1;
-    bf->ifdef_stack_ptr = s1->ifdef_stack_ptr;
     bf->fd = -1;
     bf->prev = file;
-    bf->prev_tok_flags = tok_flags;
     file = bf;
-    tok_flags = TOK_FLAG_BOL | TOK_FLAG_BOF;
+    tok_flags = TOK_FLAG_BOL;
 }
 
 ST_FUNC void tcc_close(void)
@@ -89,10 +68,7 @@ ST_FUNC void tcc_close(void)
         close(bf->fd);
         total_lines += bf->line_num - 1;
     }
-    if (bf->true_filename != bf->filename)
-        tcc_free(bf->true_filename);
     file = bf->prev;
-    tok_flags = bf->prev_tok_flags;
     tcc_free(bf);
 }
 
@@ -342,28 +318,6 @@ ST_FUNC void tcc_debug_end(TCCState *s1)
     (void)s1;
 }
 
-ST_FUNC void tcc_debug_newfile(TCCState *s1)
-{
-    (void)s1;
-}
-
-ST_FUNC void tcc_debug_bincl(TCCState *s1)
-{
-    (void)s1;
-}
-
-ST_FUNC void tcc_debug_eincl(TCCState *s1)
-{
-    (void)s1;
-}
-
-ST_FUNC int tcc_set_options(TCCState *s, const char *str)
-{
-    (void)s;
-    (void)str;
-    return 0;
-}
-
 ST_FUNC void gen_fill_nops(int bytes)
 {
 #if defined TCC_TARGET_X86_64
@@ -384,237 +338,6 @@ ST_FUNC void gen_fill_nops(int bytes)
     while (bytes-- > 0)
         g(0);
 #endif
-}
-
-static int64_t pp_expr_lor(void);
-
-static int64_t pp_number(void)
-{
-    int64_t value;
-    char *end;
-
-    switch (tok) {
-    case TOK_CCHAR:
-    case TOK_LCHAR:
-    case TOK_CINT:
-    case TOK_CUINT:
-    case TOK_CLLONG:
-    case TOK_CULLONG:
-    case TOK_CLONG:
-    case TOK_CULONG:
-        value = (int64_t)tokc.i;
-        next();
-        return value;
-    case TOK_PPNUM:
-        value = (int64_t)strtoll(tokc.str.data, &end, 0);
-        if (*end)
-            tcc_error("invalid number in preprocessor expression");
-        next();
-        return value;
-    default:
-        break;
-    }
-    if (tok == '(') {
-        next();
-        value = pp_expr_lor();
-        skip(')');
-        return value;
-    }
-    tcc_error("invalid preprocessor expression");
-}
-
-static int64_t pp_expr_unary(void)
-{
-    int op;
-
-    switch (tok) {
-    case '+':
-        next();
-        return pp_expr_unary();
-    case '-':
-    case '!':
-    case '~':
-        op = tok;
-        next();
-        if (op == '-')
-            return -pp_expr_unary();
-        if (op == '!')
-            return !pp_expr_unary();
-        return ~pp_expr_unary();
-    default:
-        return pp_number();
-    }
-}
-
-static int64_t pp_expr_mul(void)
-{
-    int64_t value = pp_expr_unary();
-
-    while (tok == '*' || tok == '/' || tok == '%') {
-        int op = tok;
-        int64_t rhs;
-
-        next();
-        rhs = pp_expr_unary();
-        if ((op == '/' || op == '%') && rhs == 0)
-            tcc_error("division by zero in preprocessor expression");
-        if (op == '*')
-            value *= rhs;
-        else if (op == '/')
-            value /= rhs;
-        else
-            value %= rhs;
-    }
-    return value;
-}
-
-static int64_t pp_expr_add(void)
-{
-    int64_t value = pp_expr_mul();
-
-    while (tok == '+' || tok == '-') {
-        int op = tok;
-        int64_t rhs;
-
-        next();
-        rhs = pp_expr_mul();
-        value = op == '+' ? value + rhs : value - rhs;
-    }
-    return value;
-}
-
-static int64_t pp_expr_shift(void)
-{
-    int64_t value = pp_expr_add();
-
-    while (tok == TOK_SHL || tok == TOK_SAR || tok == TOK_SHR) {
-        int op = tok;
-        int64_t rhs;
-
-        next();
-        rhs = pp_expr_add();
-        if (op == TOK_SHL)
-            value <<= rhs;
-        else
-            value >>= rhs;
-    }
-    return value;
-}
-
-static int64_t pp_expr_rel(void)
-{
-    int64_t value = pp_expr_shift();
-
-    while (tok == TOK_LT || tok == TOK_LE || tok == TOK_GT || tok == TOK_GE ||
-           tok == TOK_ULT || tok == TOK_ULE || tok == TOK_UGT || tok == TOK_UGE) {
-        int op = tok;
-        int64_t rhs;
-
-        next();
-        rhs = pp_expr_shift();
-        switch (op) {
-        case TOK_LT:
-            value = value < rhs;
-            break;
-        case TOK_LE:
-            value = value <= rhs;
-            break;
-        case TOK_GT:
-            value = value > rhs;
-            break;
-        case TOK_GE:
-            value = value >= rhs;
-            break;
-        case TOK_ULT:
-            value = (uint64_t)value < (uint64_t)rhs;
-            break;
-        case TOK_ULE:
-            value = (uint64_t)value <= (uint64_t)rhs;
-            break;
-        case TOK_UGT:
-            value = (uint64_t)value > (uint64_t)rhs;
-            break;
-        default:
-            value = (uint64_t)value >= (uint64_t)rhs;
-            break;
-        }
-    }
-    return value;
-}
-
-static int64_t pp_expr_eq(void)
-{
-    int64_t value = pp_expr_rel();
-
-    while (tok == TOK_EQ || tok == TOK_NE) {
-        int op = tok;
-        int64_t rhs;
-
-        next();
-        rhs = pp_expr_rel();
-        value = op == TOK_EQ ? value == rhs : value != rhs;
-    }
-    return value;
-}
-
-static int64_t pp_expr_band(void)
-{
-    int64_t value = pp_expr_eq();
-
-    while (tok == '&') {
-        next();
-        value &= pp_expr_eq();
-    }
-    return value;
-}
-
-static int64_t pp_expr_xor(void)
-{
-    int64_t value = pp_expr_band();
-
-    while (tok == '^') {
-        next();
-        value ^= pp_expr_band();
-    }
-    return value;
-}
-
-static int64_t pp_expr_bor(void)
-{
-    int64_t value = pp_expr_xor();
-
-    while (tok == '|') {
-        next();
-        value |= pp_expr_xor();
-    }
-    return value;
-}
-
-static int64_t pp_expr_land(void)
-{
-    int64_t value = pp_expr_bor();
-
-    while (tok == TOK_LAND) {
-        next();
-        value = pp_expr_bor() && value;
-    }
-    return value;
-}
-
-static int64_t pp_expr_lor(void)
-{
-    int64_t value = pp_expr_land();
-
-    while (tok == TOK_LOR) {
-        next();
-        value = pp_expr_land() || value;
-    }
-    return value;
-}
-
-ST_FUNC int expr_const(void)
-{
-    return (int)pp_expr_lor();
 }
 
 ST_FUNC int code_reloc(int reloc_type)
@@ -661,9 +384,6 @@ TinyASState *tinyas_new(void)
     s->tool_name = "tinyas";
     s->output_type = TCC_OUTPUT_OBJ;
     s->nostdlib = 1;
-    s->dollars_in_identifiers = 1;
-    s->cversion = 199901;
-    s->ppfp = stdout;
     tccelf_new(s);
     return s;
 }
@@ -673,45 +393,17 @@ void tinyas_delete(TinyASState *s)
     if (!s)
         return;
     tccelf_delete(s);
-    dynarray_reset(&s->include_paths, &s->nb_include_paths);
-    dynarray_reset(&s->sysinclude_paths, &s->nb_sysinclude_paths);
-    cstr_free(&s->cmdline_defs);
-    cstr_free(&s->cmdline_incl);
     dynarray_reset(&sym_pools, &nb_sym_pools);
     sym_free_first = NULL;
     global_stack = local_stack = NULL;
     global_label_stack = local_label_stack = NULL;
-    define_stack = NULL;
     tcc_free(s);
 }
 
-int tinyas_add_include_path(TinyASState *s, const char *path)
-{
-    dynarray_add(&s->include_paths, &s->nb_include_paths, tcc_strdup(path));
-    return 0;
-}
-
-void tinyas_define_symbol(TinyASState *s, const char *definition)
-{
-    const char *eq = strchr(definition, '=');
-
-    if (eq)
-        cstr_printf(&s->cmdline_defs, "#define %.*s %s\n",
-                    (int)(eq - definition), definition, eq + 1);
-    else
-        cstr_printf(&s->cmdline_defs, "#define %s 1\n", definition);
-}
-
-void tinyas_undefine_symbol(TinyASState *s, const char *name)
-{
-    cstr_printf(&s->cmdline_defs, "#undef %s\n", name);
-}
-
-int tinyas_assemble_file(TinyASState *s, const char *filename, int preprocess)
+int tinyas_assemble_file(TinyASState *s, const char *filename)
 {
     int ret = -1;
     int started = 0;
-    int filetype = preprocess ? AFF_TYPE_ASMPP : AFF_TYPE_ASM;
 
     tcc_enter_state(s);
     s->error_set_jmp_enabled = 1;
@@ -720,15 +412,15 @@ int tinyas_assemble_file(TinyASState *s, const char *filename, int preprocess)
             tcc_error_noabort("file '%s' not found", filename);
             goto out;
         }
-        preprocess_start(s, filetype);
+        tcc_lexer_start(s);
         started = 1;
-        ret = tcc_assemble(s, preprocess);
+        ret = tcc_assemble(s);
         if (s->nb_errors)
             ret = -1;
     }
 out:
     if (started || file)
-        preprocess_end(s);
+        tcc_lexer_end(s);
     s->error_set_jmp_enabled = 0;
     tcc_exit_state(s);
     return ret;

@@ -75,10 +75,6 @@ extern long double strtold(const char *__nptr, char **__endptr);
 
 /* parser debug */
 /* #define PARSE_DEBUG */
-/* preprocessor debug */
-/* #define PP_DEBUG */
-/* include file debug */
-/* #define INC_DEBUG */
 /* memory leak debug (only for single threaded usage) */
 /* #define MEM_DEBUG 1,2,3 */
 /* assembler debug */
@@ -199,12 +195,9 @@ enum {
 
 /* -------------------------------------------- */
 
-#define INCLUDE_STACK_SIZE  32
-#define IFDEF_STACK_SIZE    64
 #define VSTACK_SIZE         512
 #define STRING_MAX_SIZE     1024
 #define TOKSTR_MAX_SIZE     256
-#define PACK_STACK_SIZE     8
 
 #define TOK_HASH_SIZE       16384 /* must be a power of two */
 #define TOK_ALLOC_INCR      512  /* must be a power of two */
@@ -213,7 +206,6 @@ enum {
 /* token symbol management */
 typedef struct TokenSym {
     struct TokenSym *hash_next;
-    struct Sym *sym_define; /* direct pointer to define */
     struct Sym *sym_label; /* direct pointer to label */
     struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
@@ -314,14 +306,12 @@ typedef struct Sym {
             };
         };
         long long enum_val; /* enum constant if IS_ENUM_VAL */
-        int *d; /* define token stream */
         struct Sym *cleanup_func;
     };
 
     CType type; /* associated type */
     union {
         struct Sym *next; /* next related symbol (for fields and anoms) */
-        int *e; /* expanded token stream with preprocessor macros */
         int asm_label; /* associated asm label */
         struct Sym *cleanupstate; /* in defined labels */
         int *vla_array_str; /* vla array code */
@@ -411,14 +401,7 @@ typedef struct BufferedFile {
     int fd;
     struct BufferedFile *prev;
     int line_num;    /* current line number - here to simplify code */
-    int line_ref;    /* tcc -E: last printed line */
-    int ifndef_macro;  /* #ifndef macro / #endif search */
-    int ifndef_macro_saved; /* saved ifndef_macro */
-    int *ifdef_stack_ptr; /* ifdef_stack value at the start of the file */
-    int include_next_index; /* next search path */
-    int prev_tok_flags; /* saved tok_flags */
     char filename[1024];    /* filename */
-    char *true_filename; /* filename not modified by # line directive */
     unsigned char unget[4];
     unsigned char buffer[1]; /* extra size for CH_EOB char */
 } BufferedFile;
@@ -430,11 +413,10 @@ typedef struct BufferedFile {
 typedef struct TokenString {
     int *str;
     int len;
-    int need_spc;
     int allocated_len;
     int last_line_num;
     int save_line_num;
-    /* used to chain token-strings with begin/end_macro() */
+    /* used to chain token streams */
     struct TokenString *prev;
     const int *prev_ptr;
     char alloc;
@@ -458,17 +440,6 @@ typedef struct InlineFunc {
     char filename[1];
 } InlineFunc;
 
-/* include file cache, used to find files faster and also to eliminate
-   inclusion if the include file is protected by #ifndef ... #endif */
-typedef struct CachedInclude {
-    int ifndef_macro;
-    int once;
-    int hash_next; /* -1 if none */
-    char filename[1]; /* path specified in #include */
-} CachedInclude;
-
-#define CACHED_INCLUDES_HASH_SIZE 32
-
 #ifdef CONFIG_TCC_ASM
 typedef struct ExprValue {
     uint64_t v;
@@ -489,15 +460,10 @@ struct TCCState {
     unsigned char verbose; /* if true, display some information during compilation */
     unsigned char nostdlib; /* if true, no standard libraries are added */
     unsigned char filetype; /* file type for compilation (NONE,C,ASM) */
-    unsigned char optimize; /* only to #define __OPTIMIZE__ */
-    unsigned char option_pthread; /* -pthread option */
-    unsigned int  cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
 
     /* C language options */
-    unsigned char char_is_unsigned;
     unsigned char leading_underscore;
     unsigned char ms_extensions; /* allow nested named struct w/o identifier behave like unnamed */
-    unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
     unsigned char reverse_funcargs; /* if true, evaluate last function arg first */
     unsigned char gnu89_inline; /* treat 'extern inline' like 'static inline' */
@@ -531,48 +497,15 @@ struct TCCState {
     /* output type, see TCC_OUTPUT_XXX */
     int output_type;
 
-    /* include paths */
-    char **include_paths;
-    int nb_include_paths;
-
-    char **sysinclude_paths;
-    int nb_sysinclude_paths;
-
     /* library paths */
     char **library_paths;
     int nb_library_paths;
-
-    /* -D / -U options */
-    CString cmdline_defs;
-    /* -include options */
-    CString cmdline_incl;
 
     /* error handling */
     const char *tool_name;
     int error_set_jmp_enabled;
     jmp_buf error_jmp_buf;
     int nb_errors;
-
-    /* output file for preprocessing (-E) */
-    FILE *ppfp;
-
-    /* compilation */
-    BufferedFile *include_stack[INCLUDE_STACK_SIZE];
-    BufferedFile **include_stack_ptr;
-
-    int ifdef_stack[IFDEF_STACK_SIZE];
-    int *ifdef_stack_ptr;
-
-    /* included files enclosed with #ifndef MACRO */
-    int cached_includes_hash[CACHED_INCLUDES_HASH_SIZE];
-    CachedInclude **cached_includes;
-    int nb_cached_includes;
-
-    /* #pragma pack stack */
-    int pack_stack[PACK_STACK_SIZE];
-    int *pack_stack_ptr;
-    char **pragma_libs;
-    int nb_pragma_libs;
 
     /* inline functions are stored as token lists and compiled last
        only if referenced */
@@ -766,9 +699,7 @@ struct TCCState {
 #define TOK_ARROW   0xa0 /* -> */
 #define TOK_DOTS    0xa1 /* three dots */
 #define TOK_TWODOTS 0xa2 /* C++ token ? */
-#define TOK_TWOSHARPS 0xa3 /* ## preprocessing token */
-#define TOK_PLCHLDR 0xa4 /* placeholder token as defined in C99 */
-#define TOK_PPJOIN  (TOK_TWOSHARPS | SYM_FIELD) /* A '##' in a macro to mean pasting */
+#define TOK_TWOSHARPS 0xa3 /* ## token */
 #define TOK_SOTYPE  0xa7 /* alias of '(' for parsing sizeof (type) */
 
 /* assignment operators */
@@ -800,8 +731,8 @@ struct TCCState {
 #define TOK_CFLOAT  0xca /* float constant */
 #define TOK_CDOUBLE 0xcb /* double constant */
 #define TOK_CLDOUBLE 0xcc /* long double constant */
-#define TOK_PPNUM   0xcd /* preprocessor number */
-#define TOK_PPSTR   0xce /* preprocessor string */
+#define TOK_PPNUM   0xcd /* raw number token */
+#define TOK_PPSTR   0xce /* raw string token */
 #define TOK_LINENUM 0xcf /* line number info */
 
 #define TOK_HAS_VALUE(t) (t >= TOK_CCHAR && t <= TOK_LINENUM)
@@ -820,7 +751,7 @@ enum tcc_token {
 };
 
 /* keywords: tok >= TOK_IDENT && tok < TOK_UIDENT */
-#define TOK_UIDENT TOK_DEFINE
+#define TOK_UIDENT TOK___FUNC__
 
 /* ------------ libtcc.c ------------ */
 
@@ -892,7 +823,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define AFF_TYPE_NONE   0
 #define AFF_TYPE_C      1
 #define AFF_TYPE_ASM    2
-#define AFF_TYPE_ASMPP  4
 #define AFF_TYPE_LIB    8
 #define AFF_TYPE_MASK   (7 | AFF_TYPE_BIN)
 /* values from tcc_object_type(...) */
@@ -910,15 +840,13 @@ PUB_FUNC int tcc_add_library(TCCState *s, const char *libraryname);
 #define tcc_fopen fopen
 #define tcc_fclose fclose
 ST_FUNC char *tcc_load_text(int fd);
-/* for #pragma once */
-ST_FUNC int normalized_PATHCMP(const char *f1, const char *f2);
 
 /* ------------ tccpp.c ------------ */
 
 ST_DATA struct BufferedFile *file;
 ST_DATA int tok;
 ST_DATA CValue tokc;
-ST_DATA const int *macro_ptr;
+ST_DATA const int *token_stream_ptr;
 ST_DATA int parse_flags;
 ST_DATA int tok_flags;
 ST_DATA CString tokcstr; /* current parsed string, if any */
@@ -926,21 +854,15 @@ ST_DATA CString tokcstr; /* current parsed string, if any */
 /* display benchmark infos */
 ST_DATA int tok_ident;
 ST_DATA TokenSym **table_ident;
-ST_DATA int pp_expr;
 
 #define TOK_FLAG_BOL   0x0001 /* beginning of line before */
-#define TOK_FLAG_BOF   0x0002 /* beginning of file before */
-#define TOK_FLAG_ENDIF 0x0004 /* a endif was found matching starting #ifdef */
 
-#define PARSE_FLAG_PREPROCESS 0x0001 /* activate preprocessing */
-#define PARSE_FLAG_TOK_NUM    0x0002 /* return numbers instead of TOK_PPNUM */
-#define PARSE_FLAG_LINEFEED   0x0004 /* line feed is returned as a
+#define PARSE_FLAG_TOK_NUM    0x0001 /* return numbers instead of TOK_PPNUM */
+#define PARSE_FLAG_LINEFEED   0x0002 /* line feed is returned as a
                                         token. line feed is also
                                         returned at eof */
-#define PARSE_FLAG_ASM_FILE 0x0008 /* we processing an asm file: '#' can be used for line comment, etc. */
-#define PARSE_FLAG_SPACES     0x0010 /* next() returns space tokens (for -E) */
-#define PARSE_FLAG_ACCEPT_STRAYS 0x0020 /* next() returns '\\' token */
-#define PARSE_FLAG_TOK_STR    0x0040 /* return parsed strings instead of TOK_PPSTR */
+#define PARSE_FLAG_ASM_FILE   0x0004 /* '#' can be used for line comments, etc. */
+#define PARSE_FLAG_TOK_STR    0x0008 /* return parsed strings instead of TOK_PPSTR */
 
 /* isidnum_table flags: */
 #define IS_SPC 1
@@ -950,8 +872,8 @@ ST_DATA int pp_expr;
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC int tok_alloc_const(const char *str);
 ST_FUNC const char *get_tok_str(int v, CValue *cv);
-ST_FUNC void begin_macro(TokenString *str, int alloc);
-ST_FUNC void end_macro(void);
+ST_FUNC void begin_token_stream(TokenString *str, int alloc);
+ST_FUNC void end_token_stream(void);
 ST_FUNC int set_idnum(int c, int val);
 ST_INLN void tok_str_new(TokenString *s);
 ST_FUNC TokenString *tok_str_alloc(void);
@@ -959,19 +881,12 @@ ST_FUNC void tok_str_free(TokenString *s);
 ST_FUNC void tok_str_free_str(int *str);
 ST_FUNC void tok_str_add(TokenString *s, int t);
 ST_FUNC void tok_str_add_tok(TokenString *s);
-ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg);
-ST_FUNC void define_undef(Sym *s);
-ST_INLN Sym *define_find(int v);
-ST_FUNC void parse_define(void);
-ST_FUNC void skip_to_eol(int warn);
-ST_FUNC void preprocess(int is_bof);
 ST_FUNC void next(void);
 ST_INLN void unget_tok(int last_tok);
-ST_FUNC void preprocess_start(TCCState *s1, int filetype);
-ST_FUNC void preprocess_end(TCCState *s1);
+ST_FUNC void tcc_lexer_start(TCCState *s1);
+ST_FUNC void tcc_lexer_end(TCCState *s1);
 ST_FUNC void tccpp_new(TCCState *s);
 ST_FUNC void tccpp_delete(TCCState *s);
-ST_FUNC void tccpp_putfile(const char *filename);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
 
@@ -1001,7 +916,6 @@ ST_DATA Sym *global_stack;
 ST_DATA Sym *local_stack;
 ST_DATA Sym *local_label_stack;
 ST_DATA Sym *global_label_stack;
-ST_DATA Sym *define_stack;
 ST_DATA CType int_type, func_old_type, char_pointer_type;
 ST_DATA SValue *vtop;
 ST_DATA int rsym, anon_sym, ind, loc;
@@ -1030,10 +944,9 @@ ST_INLN Sym *sym_find(int v);
 ST_INLN Sym *struct_find(int v);
 
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
-ST_FUNC int expr_const(void);
 
 /* ------------ tccasm.c ------------ */
-ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
+ST_FUNC int tcc_assemble(TCCState *s1);
 #ifdef CONFIG_TCC_ASM
 ST_FUNC Sym *get_asm_sym(int name, Sym *csym);
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
@@ -1048,10 +961,6 @@ ST_FUNC int asm_parse_regvar(int t);
 ST_FUNC void tcc_debug_start(TCCState *s1);
 ST_FUNC void tcc_debug_line(TCCState *s1);
 ST_FUNC void tcc_debug_end(TCCState *s1);
-ST_FUNC void tcc_debug_newfile(TCCState *s1);
-ST_FUNC void tcc_debug_bincl(TCCState *s1);
-ST_FUNC void tcc_debug_eincl(TCCState *s1);
-ST_FUNC int tcc_set_options(TCCState *s, const char *str);
 ST_FUNC void g(int c);
 ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);

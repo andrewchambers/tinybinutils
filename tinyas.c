@@ -4,11 +4,7 @@ static void usage(FILE *out)
 {
     fputs("usage: tinyas [options] file\n"
           "  -o FILE              write object to FILE\n"
-          "  -I DIR               add preprocessor include path\n"
-          "  -D NAME[=VALUE]      define preprocessor symbol\n"
-          "  -U NAME              undefine preprocessor symbol\n"
-          "  -x assembler         treat input as plain assembly\n"
-          "  -x assembler-with-cpp preprocess before assembly\n",
+          "  -x assembler         treat input as plain assembly\n",
           out);
 }
 
@@ -30,7 +26,6 @@ int main(int argc, char **argv)
     const char *input = NULL;
     const char *outfile = NULL;
     char *owned_outfile = NULL;
-    int preprocess = -1;
     int ret = 1;
     int i;
 
@@ -46,39 +41,13 @@ int main(int argc, char **argv)
             outfile = argv[i];
         } else if (!strncmp(arg, "-o", 2) && arg[2]) {
             outfile = arg + 2;
-        } else if (!strcmp(arg, "-I")) {
-            if (++i == argc) {
-                fputs("tinyas: -I needs an argument\n", stderr);
-                goto out;
-            }
-            tinyas_add_include_path(s, argv[i]);
-        } else if (!strncmp(arg, "-I", 2) && arg[2]) {
-            tinyas_add_include_path(s, arg + 2);
-        } else if (!strcmp(arg, "-D")) {
-            if (++i == argc) {
-                fputs("tinyas: -D needs an argument\n", stderr);
-                goto out;
-            }
-            tinyas_define_symbol(s, argv[i]);
-        } else if (!strncmp(arg, "-D", 2) && arg[2]) {
-            tinyas_define_symbol(s, arg + 2);
-        } else if (!strcmp(arg, "-U")) {
-            if (++i == argc) {
-                fputs("tinyas: -U needs an argument\n", stderr);
-                goto out;
-            }
-            tinyas_undefine_symbol(s, argv[i]);
-        } else if (!strncmp(arg, "-U", 2) && arg[2]) {
-            tinyas_undefine_symbol(s, arg + 2);
         } else if (!strcmp(arg, "-x")) {
             if (++i == argc) {
                 fputs("tinyas: -x needs an argument\n", stderr);
                 goto out;
             }
             if (!strcmp(argv[i], "assembler"))
-                preprocess = 0;
-            else if (!strcmp(argv[i], "assembler-with-cpp"))
-                preprocess = 1;
+                continue;
             else {
                 fprintf(stderr, "tinyas: unsupported language: %s\n", argv[i]);
                 goto out;
@@ -114,14 +83,14 @@ int main(int argc, char **argv)
         usage(stderr);
         goto out;
     }
-    if (preprocess < 0) {
-        const char *ext = tcc_fileextension(input);
-        preprocess = !strcmp(ext, ".S");
+    if (!strcmp(tcc_fileextension(input), ".S")) {
+        fputs("tinyas: .S preprocessing is not supported\n", stderr);
+        goto out;
     }
     if (!outfile)
         outfile = owned_outfile = default_output_name(input);
 
-    if (tinyas_assemble_file(s, input, preprocess) < 0 || s->nb_errors)
+    if (tinyas_assemble_file(s, input) < 0 || s->nb_errors)
         goto out;
     if (tinyas_output_file(s, outfile) < 0 || s->nb_errors)
         goto out;

@@ -229,7 +229,6 @@ TinyLDState *tinyld_new(void)
     s->tool_name = "tinyld";
     s->output_type = TCC_OUTPUT_EXE;
     s->nostdlib = 1;
-    s->ppfp = stdout;
     tccelf_new(s);
     return s;
 }

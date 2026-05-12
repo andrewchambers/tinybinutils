@@ -68,32 +68,6 @@
      DEF(TOK_TYPEOF3, "__typeof__")
      DEF(TOK_LABEL, "__label__")
 
-/*********************************************************************/
-/* the following are not keywords. They are included to ease parsing */
-/* preprocessor only */
-     DEF(TOK_DEFINE, "define")
-     DEF(TOK_INCLUDE, "include")
-     DEF(TOK_INCLUDE_NEXT, "include_next")
-     DEF(TOK_IFDEF, "ifdef")
-     DEF(TOK_IFNDEF, "ifndef")
-     DEF(TOK_ELIF, "elif")
-     DEF(TOK_ENDIF, "endif")
-     DEF(TOK_DEFINED, "defined")
-     DEF(TOK_UNDEF, "undef")
-     DEF(TOK_ERROR, "error")
-     DEF(TOK_WARNING, "warning")
-     DEF(TOK_LINE, "line")
-     DEF(TOK_PRAGMA, "pragma")
-     DEF(TOK___LINE__, "__LINE__")
-     DEF(TOK___FILE__, "__FILE__")
-     DEF(TOK___DATE__, "__DATE__")
-     DEF(TOK___TIME__, "__TIME__")
-     DEF(TOK___FUNCTION__, "__FUNCTION__")
-     DEF(TOK___VA_ARGS__, "__VA_ARGS__")
-     DEF(TOK___COUNTER__, "__COUNTER__")
-     DEF(TOK___HAS_INCLUDE, "__has_include")
-     DEF(TOK___HAS_INCLUDE_NEXT, "__has_include_next")
-
 /* special identifiers */
      DEF(TOK___FUNC__, "__func__")
 

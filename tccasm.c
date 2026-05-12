@@ -24,7 +24,7 @@
 
 static Section *last_text_section; /* to handle .previous asm directive */
 
-static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global);
+static int tcc_assemble_internal(TCCState *s1, int global);
 static Sym* asm_new_label(TCCState *s1, int label, int is_local);
 static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
 
@@ -697,13 +697,12 @@ static void asm_parse_directive(TCCState *s1, int global)
                 tok_str_add_tok(init_str);
             }
             tok_str_add(init_str, TOK_EOF);
-            begin_macro(init_str, 1);
+            begin_token_stream(init_str, 1);
             while (repeat-- > 0) {
-                tcc_assemble_internal(s1, (parse_flags & PARSE_FLAG_PREPROCESS),
-				      global);
-                macro_ptr = init_str->str;
+                tcc_assemble_internal(s1, global);
+                token_stream_ptr = init_str->str;
             }
-            end_macro();
+            end_token_stream();
             next();
             break;
         }
@@ -804,24 +803,9 @@ static void asm_parse_directive(TCCState *s1, int global)
 	}
 	break;
     case TOK_ASMDIR_file:
-        {
-            const char *p;
-            parse_flags &= ~PARSE_FLAG_TOK_STR;
+        next();
+        while (tok != ';' && tok != TOK_LINEFEED && tok != TOK_EOF)
             next();
-            if (tok == TOK_PPNUM)
-                next();
-            if (tok == TOK_PPSTR && tokc.str.data[0] == '"') {
-                tokc.str.data[tokc.str.size - 2] = 0;
-                p = tokc.str.data + 1;
-            } else if (tok >= TOK_IDENT) {
-                p = get_tok_str(tok, &tokc);
-            } else {
-                skip_to_eol(0);
-                break;
-            }
-            tccpp_putfile(p);
-            next();
-        }
         break;
     case TOK_ASMDIR_ident:
         {
@@ -1072,14 +1056,12 @@ static void asm_parse_directive(TCCState *s1, int global)
 
 
 /* assemble a file */
-static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
+static int tcc_assemble_internal(TCCState *s1, int global)
 {
     int opcode;
     int saved_parse_flags = parse_flags;
 
     parse_flags = PARSE_FLAG_ASM_FILE | PARSE_FLAG_TOK_STR;
-    if (do_preprocess)
-        parse_flags |= PARSE_FLAG_PREPROCESS;
     for(;;) {
         next();
         if (tok == TOK_EOF)
@@ -1135,7 +1117,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
 }
 
 /* Assemble the current file */
-ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
+ST_FUNC int tcc_assemble(TCCState *s1)
 {
     int ret;
     tcc_debug_start(s1);
@@ -1143,7 +1125,7 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
-    ret = tcc_assemble_internal(s1, do_preprocess, 1);
+    ret = tcc_assemble_internal(s1, 1);
     cur_text_section->data_offset = ind;
     tcc_debug_end(s1);
     return ret;
@@ -1151,10 +1133,9 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 
 /********************************************************/
 #else
-ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
+ST_FUNC int tcc_assemble(TCCState *s1)
 {
     (void)s1;
-    (void)do_preprocess;
     tcc_error("asm not supported");
 }
 #endif /* CONFIG_TCC_ASM */
