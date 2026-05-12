@@ -27,22 +27,13 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-/* gnu headers use to #define __attribute__ to empty for non-gcc compilers */
-#ifdef __TINYC__
-# undef __attribute__
-#endif
 #include <string.h>
 #include <errno.h>
-#include <math.h>
 #include <fcntl.h>
 #include <setjmp.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
-
-/* XXX: need to define this to use them in non ISOC99 context */
-extern float strtof(const char *__nptr, char **__endptr);
-extern long double strtold(const char *__nptr, char **__endptr);
 
 #ifndef O_BINARY
 # define O_BINARY 0
@@ -59,8 +50,6 @@ extern long double strtold(const char *__nptr, char **__endptr);
 #ifndef countof
 #define countof(tab) (sizeof(tab) / sizeof((tab)[0]))
 #endif
-
-#define TCC_VERSION "0.9.27"
 
 #define NORETURN __attribute__((noreturn))
 #define ALIGNED(x) __attribute__((aligned(x)))
@@ -85,16 +74,6 @@ extern long double strtold(const char *__nptr, char **__endptr);
 # error tinyld requires exactly one target: TCC_TARGET_X86_64, TCC_TARGET_ARM64, or TCC_TARGET_RISCV64
 #endif
 
-#define TCC_TARGET_UNIX 1
-
-/* ------------ path configuration ------------ */
-
-#ifndef CONFIG_SYSROOT
-# define CONFIG_SYSROOT ""
-#endif
-
-/* -------------------------------------------- */
-
 #include "elf.h"
 
 #ifndef LIBTCCAPI
@@ -112,24 +91,9 @@ typedef struct TCCState TCCState;
 
 /* -------------------------------------------- */
 
-#ifndef ONE_SOURCE
-# define ONE_SOURCE 0
-#endif
-
-#if ONE_SOURCE
-#define ST_INLN static inline
-#define ST_FUNC static
-#define ST_DATA static
-#else
 #define ST_INLN
 #define ST_FUNC
 #define ST_DATA extern
-#endif
-
-#ifdef TCC_PROFILE /* profile all functions */
-# define static
-# define inline
-#endif
 
 /* -------------------------------------------- */
 /* ELF64 target definitions */
@@ -160,8 +124,6 @@ typedef struct TCCState TCCState;
 /* target address type */
 #define addr_t ElfW(Addr)
 #define ElfSym ElfW(Sym)
-
-#define LONG_SIZE 8
 
 #if defined TCC_TARGET_X86_64
 # define NB_ASM_REGS 16
@@ -224,20 +186,13 @@ typedef struct CType {
     struct Sym *ref;
 } CType;
 
-/* long double words on host(!) platform */
-#define LDOUBLE_WORDS ((sizeof(long double)+3)/4)
-
 /* constant value */
 typedef union CValue {
-    long double ld;
-    double d;
-    float f;
     uint64_t i;
     struct {
         char *data;
         int size;
     } str;
-    int tab[LDOUBLE_WORDS];
 } CValue;
 
 /* symbol management */
@@ -275,13 +230,6 @@ typedef struct Section {
     struct Section *prev;    /* previous section on section stack */
     char name[1];           /* section name */
 } Section;
-
-typedef struct DLLReference {
-    int level;
-    void *handle;
-    unsigned char found, index;
-    char name[1];
-} DLLReference;
 
 /* -------------------------------------------------- */
 
@@ -390,86 +338,19 @@ struct TCCState {
 
 };
 
-/* The current value can be: */
-#define VT_VALMASK   0x003f  /* mask for value location, register or: */
-#define VT_CONST     0x0030  /* constant in vc (must be first non register value) */
-#define VT_LLOCAL    0x0031  /* lvalue, offset on stack */
-#define VT_LOCAL     0x0032  /* offset on stack */
-#define VT_CMP       0x0033  /* the value is stored in processor flags (in vc) */
-#define VT_JMP       0x0034  /* value is the consequence of jmp true (even) */
-#define VT_JMPI      0x0035  /* value is the consequence of jmp false (odd) */
-#define VT_LVAL      0x0100  /* var is an lvalue */
 #define VT_SYM       0x0200  /* a symbol value is added */
-#define VT_MUSTCAST  0x0C00  /* value must be casted to be correct (used for
-                                char/short stored in integer registers) */
-#define VT_NONCONST  0x1000  /* VT_CONST, but not an (C standard) integer
-                                constant expression */
-/* types */
-#define VT_BTYPE       0x000f  /* mask for basic type */
-#define VT_VOID             0  /* void type */
-#define VT_BYTE             1  /* signed byte type */
-#define VT_SHORT            2  /* short type */
-#define VT_INT              3  /* integer type */
-#define VT_LLONG            4  /* 64 bit integer */
-#define VT_PTR              5  /* pointer */
-#define VT_FUNC             6  /* function type */
-#define VT_STRUCT           7  /* struct/union definition */
-#define VT_FLOAT            8  /* IEEE float */
-#define VT_DOUBLE           9  /* IEEE double */
-#define VT_LDOUBLE         10  /* IEEE long double */
-#define VT_BOOL            11  /* ISOC99 boolean type */
-#define VT_QLONG           13  /* 128-bit integer. Only used for x86-64 ABI */
-#define VT_QFLOAT          14  /* 128-bit float. Only used for x86-64 ABI */
-
-#define VT_UNSIGNED    0x0010  /* unsigned type */
-#define VT_DEFSIGN     0x0020  /* explicitly signed or unsigned */
-#define VT_ARRAY       0x0040  /* array type (also has VT_PTR) */
-#define VT_BITFIELD    0x0080  /* bitfield modifier */
-#define VT_CONSTANT    0x0100  /* const modifier */
-#define VT_VOLATILE    0x0200  /* volatile modifier */
-#define VT_VLA         0x0400  /* VLA type (also has VT_PTR and VT_ARRAY) */
-#define VT_LONG        0x0800  /* long type (also has VT_INT rsp. VT_LLONG) */
-
-/* storage */
+#define VT_BTYPE       0x000f
+#define VT_VOID             0
+#define VT_FUNC             6
 #define VT_EXTERN  0x00001000  /* extern definition */
 #define VT_STATIC  0x00002000  /* static variable */
-#define VT_TYPEDEF 0x00004000  /* typedef definition */
-#define VT_INLINE  0x00008000  /* inline definition */
-/* currently unused: 0x000[1248]0000  */
 
-#define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (32 - 2*6) */
-#define VT_STRUCT_MASK (((1U << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
-#define BIT_POS(t) (((t) >> VT_STRUCT_SHIFT) & 0x3f)
-#define BIT_SIZE(t) (((t) >> (VT_STRUCT_SHIFT + 6)) & 0x3f)
-
-#define VT_UNION    (1 << VT_STRUCT_SHIFT | VT_STRUCT)
-#define VT_ENUM     (2 << VT_STRUCT_SHIFT) /* integral type is an enum really */
-#define VT_ENUM_VAL (3 << VT_STRUCT_SHIFT) /* integral type is an enum constant really */
-
-#define IS_ENUM(t) ((t & VT_STRUCT_MASK) == VT_ENUM)
-#define IS_ENUM_VAL(t) ((t & VT_STRUCT_MASK) == VT_ENUM_VAL)
-#define IS_UNION(t) ((t & (VT_STRUCT_MASK|VT_BTYPE)) == VT_UNION)
-
-#define VT_ATOMIC   VT_VOLATILE
-
-/* type mask (except storage) */
-#define VT_STORAGE (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE)
-#define VT_TYPE (~(VT_STORAGE|VT_STRUCT_MASK))
-
-/* symbol was created by tccasm.c first */
+#define VT_STRUCT_SHIFT 20
+#define VT_STRUCT_MASK (((1U << 12) - 1) << VT_STRUCT_SHIFT | 0x0080)
 #define VT_ASM (VT_VOID | 4 << VT_STRUCT_SHIFT)
 #define VT_ASM_FUNC (VT_VOID | 5 << VT_STRUCT_SHIFT)
 #define IS_ASM_SYM(sym) (((sym)->type.t & ((VT_BTYPE|VT_STRUCT_MASK) & ~(1<<VT_STRUCT_SHIFT))) == VT_ASM)
 #define IS_ASM_FUNC(t) ((t & (VT_BTYPE|VT_STRUCT_MASK)) == VT_ASM_FUNC)
-
-/* base type is array (from typedef/typeof) */
-#define VT_BT_ARRAY (6 << VT_STRUCT_SHIFT)
-#define IS_BT_ARRAY(t) ((t & VT_STRUCT_MASK) == VT_BT_ARRAY)
-
-/* general: set/get the pseudo-bitfield value for bit-mask M */
-#define BFVAL(M,N) ((unsigned)((M) & ~((M) << 1)) * (N))
-#define BFGET(X,M) (((X) & (M)) / BFVAL(M,1))
-#define BFSET(X,M,N) ((X) = ((X) & ~(M)) | BFVAL(M,N))
 
 /* token values */
 
@@ -532,20 +413,11 @@ struct TCCState {
 /* tokens that carry values (in additional token string space / tokc) --> */
 #define TOK_CCHAR   0xc0 /* char constant in tokc */
 #define TOK_LCHAR   0xc1
-#define TOK_CINT    0xc2 /* number in tokc */
-#define TOK_CUINT   0xc3 /* unsigned int constant */
-#define TOK_CLLONG  0xc4 /* long long constant */
-#define TOK_CULLONG 0xc5 /* unsigned long long constant */
-#define TOK_CLONG   0xc6 /* long constant */
-#define TOK_CULONG  0xc7 /* unsigned long constant */
-#define TOK_STR     0xc8 /* pointer to string in tokc */
-#define TOK_LSTR    0xc9
-#define TOK_CFLOAT  0xca /* float constant */
-#define TOK_CDOUBLE 0xcb /* double constant */
-#define TOK_CLDOUBLE 0xcc /* long double constant */
-#define TOK_PPNUM   0xcd /* raw number token */
-#define TOK_PPSTR   0xce /* raw string token */
-#define TOK_LINENUM 0xcf /* line number info */
+#define TOK_STR     0xc2 /* pointer to string in tokc */
+#define TOK_LSTR    0xc3
+#define TOK_PPNUM   0xc4 /* raw number token */
+#define TOK_PPSTR   0xc5 /* raw string token */
+#define TOK_LINENUM 0xc6 /* line number info */
 
 #define TOK_HAS_VALUE(t) (t >= TOK_CCHAR && t <= TOK_LINENUM)
 
@@ -656,7 +528,6 @@ ST_DATA TokenSym **table_ident;
 
 #define TOK_FLAG_BOL   0x0001 /* beginning of line before */
 
-#define PARSE_FLAG_TOK_NUM    0x0001 /* return numbers instead of TOK_PPNUM */
 #define PARSE_FLAG_LINEFEED   0x0002 /* line feed is returned as a
                                         token. line feed is also
                                         returned at eof */
@@ -838,11 +709,7 @@ static inline void add64le(unsigned char *p, int64_t x) {
 
 /********************************************************/
 #undef ST_DATA
-#if ONE_SOURCE
-#define ST_DATA static
-#else
 #define ST_DATA
-#endif
 /********************************************************/
 
 #define text_section        TCC_STATE_VAR(text_section)
