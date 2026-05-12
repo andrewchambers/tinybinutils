@@ -116,6 +116,7 @@ ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_
     int modrm;
     unsigned plt_offset, relofs;
 
+    (void)attr;
     modrm = 0x25;
 
     /* empty PLT: create PLT0 entry that pushes the library identifier
@@ -188,40 +189,19 @@ ST_FUNC void relocate_plt(TCCState *s1)
 
 ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
-    int sym_index, esym_index;
+    int sym_index;
 
     sym_index = ELFW(R_SYM)(rel->r_info);
 
     switch (type) {
         case R_X86_64_64:
-            if (s1->output_type & TCC_OUTPUT_DYN) {
-                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
-                qrel->r_offset = rel->r_offset;
-                if (esym_index) {
-                    qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_64);
-                    qrel->r_addend = rel->r_addend;
-                    qrel++;
-                    break;
-                } else {
-                    qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
-                    qrel->r_addend = read64le(ptr) + val;
-                    qrel++;
-                }
-            }
             add64le(ptr, val);
             break;
         case R_X86_64_32:
         case R_X86_64_32S:
-            if (s1->output_type & TCC_OUTPUT_DYN) {
-                /* XXX: this logic may depend on TCC's codegen
-                   now TCC uses R_X86_64_32 even for a 64bit pointer */
-                qrel->r_offset = rel->r_offset;
-                qrel->r_info = ELFW(R_INFO)(0, R_X86_64_RELATIVE);
-                /* Use sign extension! */
-                qrel->r_addend = (int)read32le(ptr) + val;
-                qrel++;
-            }
-            if ((type == R_X86_64_32 ? val != (unsigned)val : val != (int)val)
+            if ((type == R_X86_64_32
+                    ? val != (uint32_t)val
+                    : (int64_t)val != (int32_t)val)
                 /* ignore relocation check for stab section */
                 && (stab_section == NULL ||
                     addr < stab_section->sh_addr ||
@@ -232,18 +212,6 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
             break;
 
         case R_X86_64_PC32:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
-                /* DLL relocation */
-                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
-                if (esym_index) {
-                    qrel->r_offset = rel->r_offset;
-                    qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC32);
-                    /* Use sign extension! */
-                    qrel->r_addend = (int)read32le(ptr) + rel->r_addend;
-                    qrel++;
-                    break;
-                }
-            }
             goto plt32pc32;
 
         case R_X86_64_PLT32:
@@ -254,10 +222,6 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
             long long diff;
             diff = (long long)val - addr;
             if (diff < -2147483648LL || diff > 2147483647LL) {
-#ifdef TCC_TARGET_PE
-              /* ignore overflow with undefined weak symbols */
-              if (((ElfW(Sym)*)symtab_section->data)[sym_index].st_shndx != SHN_UNDEF)
-#endif
                 tcc_error_noabort("relocation '%d' out of range", type);
             }
             add32le(ptr, diff);
@@ -272,17 +236,6 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
             break;
 
         case R_X86_64_PC64:
-            if (s1->output_type == TCC_OUTPUT_DLL) {
-                /* DLL relocation */
-                esym_index = get_sym_attr(s1, sym_index, 0)->dyn_index;
-                if (esym_index) {
-                    qrel->r_offset = rel->r_offset;
-                    qrel->r_info = ELFW(R_INFO)(esym_index, R_X86_64_PC64);
-                    qrel->r_addend = read64le(ptr) + rel->r_addend;
-                    qrel++;
-                    break;
-                }
-            }
             add64le(ptr, val - addr);
             break;
 
@@ -395,9 +348,6 @@ ST_FUNC void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr,
         case R_X86_64_NONE:
             break;
         case R_X86_64_RELATIVE:
-#ifdef TCC_TARGET_PE
-            add32le(ptr, val - s1->pe_imagebase);
-#endif
             /* do nothing */
             break;
         default:

@@ -1,93 +1,68 @@
-Tiny C Compiler - C Scripting Everywhere - The Smallest ANSI C compiler
------------------------------------------------------------------------
+tinyld
+======
 
-Features:
---------
+tinyld is a small collection of ELF-only tools forked from tcc:
+a static linker, standalone assemblers, and a static archive tool.
+The goal is to keep the object, archive, and ELF linking code small enough
+to use with other small compilers.
 
-- SMALL! You can compile and execute C code everywhere, for example on
-  rescue disks.
+Current scope:
 
-- FAST! tcc generates machine code for i386, x86_64, arm, aarch64 or
-  riscv64.  Compiles and links about 10 times faster than 'gcc -O0'.
+- ELF executable output only
+- static linking only
+- relocatable object input
+- static archive input
+- a small GNU ld-script subset for INPUT(...) and GROUP(...)
+- x86_64, AArch64, and RISC-V 64-bit Linux targets
+- standalone assembler output as ELF relocatable `.o` files
 
-- UNLIMITED! Any C dynamic library can be used directly. TCC is
-  heading toward full ISOC99 compliance. TCC can of course compile
-  itself.
+Build:
 
-- SAFE! tcc includes an optional memory and bound checker. Bound
-  checked code can be mixed freely with standard code.
+    make
 
-- Compile and execute C source directly. No linking or assembly
-  necessary. Full C preprocessor included.
+Tools:
 
-- C script supported : just add '#!/usr/local/bin/tcc -run' at the first
-  line of your C source, and execute it directly from the command
-  line.
+- `tinyld`: alias for the x86_64 ELF static linker
+- `tinyld-x86_64`: x86_64 ELF static linker
+- `tinyld-aarch64`: AArch64 ELF static linker
+- `tinyld-riscv64`: RISC-V 64-bit ELF static linker
+- `tinyas`: alias for the x86_64 ELF assembler
+- `tinyas-x86_64`: x86_64 ELF assembler
+- `tinyas-aarch64`: AArch64 ELF assembler
+- `tinyas-riscv64`: RISC-V 64-bit ELF assembler
+- `tinyar`: small static archive creator/list/extractor for ELF64 `.o` files
 
-Documentation:
--------------
+Example:
 
-1) Installation on Linux, BSD variants or macOS hosts:
+    ./tinyld -static -nostdlib -L/path/to/musl/lib \
+        -o hello \
+        /path/to/musl/lib/crt1.o \
+        /path/to/musl/lib/crti.o \
+        hello.o \
+        -lc \
+        /path/to/musl/lib/crtn.o
 
-   ./configure
-   make
-   make test
-   make install
+Archive example:
 
-   Notes: On BSD hosts, gmake should be used instead of make.
-   For Windows read tcc-win32.txt.
+    ./tinyar crs libhello.a hello.o helper.o
+    ./tinyld -static -nostdlib -L. -L/path/to/musl/lib \
+        -o hello \
+        /path/to/musl/lib/crt1.o \
+        /path/to/musl/lib/crti.o \
+        main.o \
+        -lhello \
+        -lc \
+        /path/to/musl/lib/crtn.o
 
-makeinfo must be installed to compile the doc.  By default, tcc is
-installed in /usr/local/bin.  ./configure --help  shows configuration
-options.
+Assembler example:
 
+    ./tinyas-x86_64 -o start.o start.s
+    ./tinyld-x86_64 -static -nostdlib -o start start.o
 
-2) Introduction
+Unsupported by design:
 
-We assume here that you know ANSI C. Look at the example ex1.c to know
-what the programs look like.
-
-The include file <tcclib.h> can be used if you want a small basic libc
-include support (especially useful for floppy disks). Of course, you
-can also use standard headers, although they are slower to compile.
-
-You can begin your C script with '#!/usr/local/bin/tcc -run' on the first
-line and set its execute bits (chmod a+x your_script). Then, you can
-launch the C code as a shell or perl script :-) The command line
-arguments are put in 'argc' and 'argv' of the main functions, as in
-ANSI C.
-
-3) Examples
-
-ex1.c: simplest example (hello world). Can also be launched directly
-as a script: './ex1.c'.
-
-ex2.c: more complicated example: find a number with the four
-operations given a list of numbers (benchmark).
-
-ex3.c: compute fibonacci numbers (benchmark).
-
-ex4.c: more complicated: X11 program. Very complicated test in fact
-because standard headers are being used ! As for ex1.c, can also be launched
-directly as a script: './ex4.c'.
-
-ex5.c: 'hello world' with standard glibc headers.
-
-tcc.c: TCC can of course compile itself. Used to check the code
-generator.
-
-tcctest.c: auto test for TCC which tests many subtle possible bugs. Used
-when doing 'make test'.
-
-4) Full Documentation
-
-Please read tcc-doc.html to have all the features of TCC.  Additional
-information for the Windows port is in tcc-win32.txt.
-
-License:
--------
-
-TCC is distributed under the GNU Lesser General Public License (see
-COPYING file).
-
-Fabrice Bellard.
+- dynamic libraries
+- shared object output
+- PIE output
+- in-memory execution
+- tcc runtime support libraries
