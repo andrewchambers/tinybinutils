@@ -20,7 +20,6 @@ Scope:
 - static linking only
 - relocatable `.o` and static `.a` input
 - x86_64, AArch64, and RISC-V 64-bit Linux targets
-- small GNU ld-script subset for `INPUT(...)` and `GROUP(...)`
 
 Unsupported by design:
 

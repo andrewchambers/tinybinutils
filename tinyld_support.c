@@ -205,23 +205,6 @@ static void tinyld_split_path(TCCState *s, void *ary, int *nb_ary, const char *p
     }
 }
 
-ST_FUNC char *tcc_load_text(int fd)
-{
-    off_t len = lseek(fd, 0, SEEK_END);
-    char *buf;
-
-    if (len < 0)
-        return NULL;
-    buf = tcc_malloc((unsigned long)len + 1);
-    lseek(fd, 0, SEEK_SET);
-    if (full_read(fd, buf, (size_t)len) != len) {
-        tcc_free(buf);
-        return NULL;
-    }
-    buf[len] = '\0';
-    return buf;
-}
-
 TinyLDState *tinyld_new(void)
 {
     TCCState *s = tcc_mallocz(sizeof(*s));
@@ -270,9 +253,7 @@ static int tinyld_add_binary(TCCState *s1, int flags, const char *filename, int 
         ret = tcc_error_noabort("%s: dynamic libraries are not supported", filename);
         break;
     default:
-        ret = tcc_load_ldscript(s1, fd);
-        if (ret == FILE_NOT_RECOGNIZED)
-            ret = tcc_error_noabort("%s: unrecognized file type", filename);
+        ret = tcc_error_noabort("%s: unrecognized file type", filename);
         break;
     }
     close(fd);

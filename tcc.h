@@ -566,9 +566,6 @@ struct TCCState {
     int total_lines;
     unsigned int total_bytes;
 
-    /* used by tcc_load_ldscript */
-    unsigned char *ld_p; /* text pointer */
-
     /* for warnings/errors for object files */
     const char *current_filename;
 
@@ -588,10 +585,6 @@ struct TCCState {
                                 char/short stored in integer registers) */
 #define VT_NONCONST  0x1000  /* VT_CONST, but not an (C standard) integer
                                 constant expression */
-#define VT_MUSTBOUND 0x4000  /* bound checking must be done before
-                                dereferencing value */
-#define VT_BOUNDED   0x8000  /* value is bounded. The address of the
-                                bounding function call point is in vc */
 /* types */
 #define VT_BTYPE       0x000f  /* mask for basic type */
 #define VT_VOID             0  /* void type */
@@ -833,13 +826,11 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 
 /* return value of tcc_add_file_internal(): 0, -1, or FILE_NOT_FOUND */
 #define FILE_NOT_FOUND -2
-#define FILE_NOT_RECOGNIZED -3 /* unrecognized file type */
 
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
 PUB_FUNC int tcc_add_library(TCCState *s, const char *libraryname);
 #define tcc_fopen fopen
 #define tcc_fclose fclose
-ST_FUNC char *tcc_load_text(int fd);
 
 /* ------------ tccpp.c ------------ */
 
@@ -1019,8 +1010,6 @@ ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t 
     for (elem = (type *) sec->data + startoff; \
          elem < (type *) (sec->data + sec->data_offset); elem++)
 
-ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd);
-
 /* ------------ xxx-link.c ------------ */
 
 ST_FUNC int code_reloc (int reloc_type);
@@ -1104,8 +1093,6 @@ static inline void add64le(unsigned char *p, int64_t x) {
 #define bss_section         TCC_STATE_VAR(bss_section)
 #define common_section      TCC_STATE_VAR(common_section)
 #define cur_text_section    TCC_STATE_VAR(cur_text_section)
-#define bounds_section      TCC_STATE_VAR(bounds_section)
-#define lbounds_section     TCC_STATE_VAR(lbounds_section)
 #define symtab_section      TCC_STATE_VAR(symtab_section)
 #define gnu_ext             TCC_STATE_VAR(gnu_ext)
 #define tcc_error_noabort   TCC_SET_STATE(_tcc_error_noabort)

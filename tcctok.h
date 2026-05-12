@@ -234,30 +234,6 @@
      DEF(TOK___getf2, "__getf2")
 #endif
 
-/* bound checking symbols */
-#ifdef CONFIG_TCC_BCHECK
-     DEF(TOK___bound_ptr_add, "__bound_ptr_add")
-     DEF(TOK___bound_ptr_indir1, "__bound_ptr_indir1")
-     DEF(TOK___bound_ptr_indir2, "__bound_ptr_indir2")
-     DEF(TOK___bound_ptr_indir4, "__bound_ptr_indir4")
-     DEF(TOK___bound_ptr_indir8, "__bound_ptr_indir8")
-     DEF(TOK___bound_ptr_indir12, "__bound_ptr_indir12")
-     DEF(TOK___bound_ptr_indir16, "__bound_ptr_indir16")
-     DEF(TOK___bound_main_arg, "__bound_main_arg")
-     DEF(TOK___bound_local_new, "__bound_local_new")
-     DEF(TOK___bound_local_delete, "__bound_local_delete")
-     DEF(TOK___bound_setjmp, "__bound_setjmp")
-     DEF(TOK___bound_longjmp, "__bound_longjmp")
-     DEF(TOK___bound_new_region, "__bound_new_region")
-     DEF(TOK_sigsetjmp, "sigsetjmp")
-     DEF(TOK___sigsetjmp, "__sigsetjmp")
-     DEF(TOK_siglongjmp, "siglongjmp")
-     DEF(TOK_setjmp, "setjmp")
-     DEF(TOK__setjmp, "_setjmp")
-     DEF(TOK_longjmp, "longjmp")
-#endif
-
-
 /*********************************************************************/
 /* Tiny Assembler */
 #define DEF_ASM(x) DEF(TOK_ASM_ ## x, #x)
