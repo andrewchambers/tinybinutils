@@ -28,7 +28,6 @@ static int tcc_assemble_internal(TCCState *s1, int global);
 static Sym* asm_new_label(TCCState *s1, int label, int is_local);
 static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
 
-#if PTR_SIZE == 8
 /* output constant with relocation if 'r & VT_SYM' is true */
 ST_FUNC void gen_addr64(int r, Sym *sym, int64_t c)
 {
@@ -42,7 +41,6 @@ ST_FUNC void gen_expr64(ExprValue *pe)
 {
     gen_addr64(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }
-#endif
 
 static int asm_get_prefix_name(TCCState *s1, const char *prefix, unsigned int n)
 {
@@ -573,37 +571,8 @@ static void asm_parse_directive(TCCState *s1, int global)
         ind += size;
         break;
     case TOK_ASMDIR_quad:
-#if PTR_SIZE == 8
 	size = 8;
 	goto asm_data;
-#else
-        next();
-        for(;;) {
-            uint64_t vl;
-            const char *p;
-
-            p = tokc.str.data;
-            if (tok != TOK_PPNUM) {
-            error_constant:
-                tcc_error("64 bit constant");
-            }
-            vl = strtoll(p, (char **)&p, 0);
-            if (*p != '\0')
-                goto error_constant;
-            next();
-            if (sec->sh_type != SHT_NOBITS) {
-                /* XXX: endianness */
-                gen_le32(vl);
-                gen_le32(vl >> 32);
-            } else {
-                ind += 8;
-            }
-            if (tok != ',')
-                break;
-            next();
-        }
-        break;
-#endif
     case TOK_ASMDIR_byte:
         size = 1;
         goto asm_data;
@@ -622,10 +591,8 @@ static void asm_parse_directive(TCCState *s1, int global)
             if (sec->sh_type != SHT_NOBITS) {
                 if (size == 4) {
                     gen_expr32(&e);
-#if PTR_SIZE == 8
 		} else if (size == 8) {
 		    gen_expr64(&e);
-#endif
                 } else {
                     if (e.sym)
                         expect("constant");
@@ -953,26 +920,10 @@ static void asm_parse_directive(TCCState *s1, int global)
 	next();
 	pop_section(s1);
 	break;
-#ifdef TCC_TARGET_I386
-    case TOK_ASMDIR_code16:
-        {
-            next();
-            s1->seg_size = 16;
-        }
-        break;
-    case TOK_ASMDIR_code32:
-        {
-            next();
-            s1->seg_size = 32;
-        }
-        break;
-#endif
-#if PTR_SIZE == 8
     /* added for compatibility with GAS */
     case TOK_ASMDIR_code64:
         next();
         break;
-#endif
 #ifdef TCC_TARGET_RISCV64
     case TOK_ASMDIR_option:
         next();

@@ -794,10 +794,8 @@ redo:
                 } else if (sym->st_shndx == SHN_ABS) {
                     if (sym->st_value == 0)
                         continue;
-                    if (PTR_SIZE != 8)
-                        continue;
-                    /* from tcc_add_symbol(): on 64 bit platforms these
-                       need to go through .got */
+                    /* from tcc_add_symbol(): absolute 64-bit symbols need
+                       to go through .got */
                 } else
                     continue;
             }
@@ -957,11 +955,7 @@ ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
     if (0 == offset)
         return;
     section_reserve(s1->got, offset + PTR_SIZE);
-#if PTR_SIZE == 8
     write64le(s1->got->data + offset, sym->st_value);
-#else
-    write32le(s1->got->data + offset, sym->st_value);
-#endif
 }
 
 /* Perform relocation to GOT or PLT entries */

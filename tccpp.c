@@ -986,10 +986,6 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_LCHAR:
     case TOK_CFLOAT:
     case TOK_LINENUM:
-#if LONG_SIZE == 4
-    case TOK_CLONG:
-    case TOK_CULONG:
-#endif
         str[len++] = cv->tab[0];
         break;
     case TOK_PPNUM:
@@ -1010,10 +1006,8 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
-#if LONG_SIZE == 8
     case TOK_CLONG:
     case TOK_CULONG:
-#endif
         str[len++] = cv->tab[0];
         str[len++] = cv->tab[1];
         break;
@@ -1052,18 +1046,12 @@ static inline void tok_get(int *t, const int **pp, CValue *cv)
 
     tab = cv->tab;
     switch(*t = *p++) {
-#if LONG_SIZE == 4
-    case TOK_CLONG:
-#endif
     case TOK_CINT:
     case TOK_CCHAR:
     case TOK_LCHAR:
     case TOK_LINENUM:
         cv->i = *p++;
         break;
-#if LONG_SIZE == 4
-    case TOK_CULONG:
-#endif
     case TOK_CUINT:
         cv->i = (unsigned)*p++;
         break;
@@ -1081,10 +1069,8 @@ static inline void tok_get(int *t, const int **pp, CValue *cv)
     case TOK_CDOUBLE:
     case TOK_CLLONG:
     case TOK_CULLONG:
-#if LONG_SIZE == 8
     case TOK_CLONG:
     case TOK_CULONG:
-#endif
         n = 2;
         goto copy;
     case TOK_CLDOUBLE:
@@ -1261,18 +1247,7 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
         if (!is_long)
             cstr_ccat(outstr, c);
         else {
-#ifdef TCC_TARGET_PE
-            /* store as UTF-16 */
-            if (c < 0x10000) {
-                cstr_wccat(outstr, c);
-            } else {
-                c -= 0x10000;
-                cstr_wccat(outstr, (c >> 10) + 0xD800);
-                cstr_wccat(outstr, (c & 0x3FF) + 0xDC00);
-            }
-#else
             cstr_wccat(outstr, c);
-#endif
         }
     }
     /* add a trailing '\0' */
@@ -1602,16 +1577,16 @@ static void parse_number(const char *p)
 
         /* Determine if it needs 64 bits and/or unsigned in order to fit */
         if (ucount == 0 && b == 10) {
-            if (lcount <= (LONG_SIZE == 4)) {
+            if (lcount == 0) {
                 if (n >= 0x80000000U)
-                    lcount = (LONG_SIZE == 4) + 1;
+                    lcount = 1;
             }
             if (n >= 0x8000000000000000ULL)
                 ov = 1, ucount = 1;
         } else {
-            if (lcount <= (LONG_SIZE == 4)) {
+            if (lcount == 0) {
                 if (n >= 0x100000000ULL)
-                    lcount = (LONG_SIZE == 4) + 1;
+                    lcount = 1;
                 else if (n >= 0x80000000U)
                     ucount = 1;
             }
@@ -1706,7 +1681,7 @@ maybe_newline:
             p++;
             tok = TOK_TWOSHARPS;
         } else {
-#if !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_ARM64)
+#ifndef TCC_TARGET_ARM64
             if (parse_flags & PARSE_FLAG_ASM_FILE) {
                 p = parse_line_comment(p - 1);
                 goto redo_no_start;
@@ -1976,12 +1951,6 @@ maybe_newline:
         
         /* simple tokens */
     case '@': /* only used in assembler */
-#ifdef TCC_TARGET_ARM /* comment on arm asm */
-        if (parse_flags & PARSE_FLAG_ASM_FILE) {
-            p = parse_line_comment(p);
-            goto redo_no_start;
-        }
-#endif
     case '(':
     case ')':
     case '[':
