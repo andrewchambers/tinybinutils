@@ -6,7 +6,6 @@
 
 #ifdef TARGET_DEFS_ONLY
 
-#define CONFIG_TCC_ASM
 /* 32 general purpose + 32 floating point registers */
 #define NB_ASM_REGS 64
 

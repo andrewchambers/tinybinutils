@@ -3,12 +3,7 @@
 
 #undef free
 
-Sym *global_stack;
-Sym *local_stack;
-Sym *local_label_stack;
-Sym *global_label_stack;
 CType int_type, func_old_type, char_pointer_type;
-SValue *vtop;
 int rsym, anon_sym, ind, loc;
 char debug_modes;
 int nocode_wanted;
@@ -36,7 +31,6 @@ const char * const target_machine_defs =
 static Sym *sym_free_first;
 static void **sym_pools;
 static int nb_sym_pools;
-static int local_scope;
 
 void libc_free(void *ptr)
 {
@@ -114,13 +108,7 @@ static Sym *sym_malloc(void)
     return sym;
 }
 
-ST_FUNC void sym_free(Sym *sym)
-{
-    sym->next = sym_free_first;
-    sym_free_first = sym;
-}
-
-ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c)
+static Sym *sym_new(int v, int t, int c)
 {
     Sym *s = sym_malloc();
 
@@ -128,63 +116,7 @@ ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c)
     s->v = v;
     s->type.t = t;
     s->c = c;
-    s->prev = *ps;
-    *ps = s;
     return s;
-}
-
-ST_FUNC Sym *sym_find2(Sym *s, int v)
-{
-    while (s) {
-        if (s->v == v)
-            return s;
-        s = s->prev;
-    }
-    return NULL;
-}
-
-static void sym_link(Sym *s, int yes)
-{
-    TokenSym *ts = table_ident[(s->v & ~SYM_STRUCT) - TOK_IDENT];
-    Sym **ps = (s->v & SYM_STRUCT) ? &ts->sym_struct : &ts->sym_identifier;
-
-    if (yes) {
-        s->prev_tok = *ps;
-        *ps = s;
-        s->sym_scope = local_scope;
-    } else {
-        *ps = s->prev_tok;
-    }
-}
-
-ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
-{
-    Sym **ps = local_stack ? &local_stack : &global_stack;
-    Sym *s = sym_push2(ps, v, type->t, c);
-
-    s->type.ref = type->ref;
-    s->r = r;
-    if ((v & ~SYM_STRUCT) < SYM_FIRST_ANOM)
-        sym_link(s, 1);
-    return s;
-}
-
-ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep)
-{
-    Sym *s = *ptop;
-
-    while (s != b) {
-        Sym *prev = s->prev;
-        int v = s->v;
-
-        if ((v & ~SYM_STRUCT) < SYM_FIRST_ANOM)
-            sym_link(s, 0);
-        if (!keep)
-            sym_free(s);
-        s = prev;
-    }
-    if (!keep)
-        *ptop = b;
 }
 
 ST_FUNC Sym *sym_find(int v)
@@ -195,24 +127,13 @@ ST_FUNC Sym *sym_find(int v)
     return table_ident[v]->sym_identifier;
 }
 
-ST_FUNC Sym *struct_find(int v)
-{
-    v -= TOK_IDENT;
-    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
-        return NULL;
-    return table_ident[v]->sym_struct;
-}
-
 ST_FUNC Sym *global_identifier_push(int v, int t, int c)
 {
-    Sym *s = sym_push2(&global_stack, v, t, c);
+    Sym *s = sym_new(v, t, c);
     Sym **ps;
 
-    s->r = VT_CONST | VT_SYM;
     if (v < SYM_FIRST_ANOM) {
         ps = &table_ident[v - TOK_IDENT]->sym_identifier;
-        while (*ps && (*ps)->sym_scope)
-            ps = &(*ps)->prev_tok;
         s->prev_tok = *ps;
         *ps = s;
     }
@@ -233,14 +154,14 @@ ST_FUNC void update_storage(Sym *sym)
 
     if (!esym)
         return;
-    if (sym->a.visibility)
+    if (sym->visibility)
         esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
-            | sym->a.visibility;
+            | sym->visibility;
     if (esym->st_shndx == SHN_UNDEF)
-        bind = sym->a.weak ? STB_WEAK : STB_GLOBAL;
+        bind = sym->weak ? STB_WEAK : STB_GLOBAL;
     else if (sym->type.t & VT_STATIC)
         bind = STB_LOCAL;
-    else if (sym->a.weak)
+    else if (sym->weak)
         bind = STB_WEAK;
     else
         bind = STB_GLOBAL;
@@ -395,8 +316,6 @@ void tinyas_delete(TinyASState *s)
     tccelf_delete(s);
     dynarray_reset(&sym_pools, &nb_sym_pools);
     sym_free_first = NULL;
-    global_stack = local_stack = NULL;
-    global_label_stack = local_label_stack = NULL;
     tcc_free(s);
 }
 

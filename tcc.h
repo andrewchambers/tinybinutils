@@ -163,8 +163,6 @@ typedef struct TCCState TCCState;
 
 #define LONG_SIZE 8
 
-#define CONFIG_TCC_ASM 1
-
 #if defined TCC_TARGET_X86_64
 # define NB_ASM_REGS 16
 enum {
@@ -206,8 +204,6 @@ enum {
 /* token symbol management */
 typedef struct TokenSym {
     struct TokenSym *hash_next;
-    struct Sym *sym_label; /* direct pointer to label */
-    struct Sym *sym_struct; /* direct pointer to structure */
     struct Sym *sym_identifier; /* direct pointer to identifier */
     int tok; /* token number */
     int len;
@@ -244,84 +240,19 @@ typedef union CValue {
     int tab[LDOUBLE_WORDS];
 } CValue;
 
-/* value on stack */
-typedef struct SValue {
-    CType type;      /* type */
-    unsigned short r;      /* register + flags */
-    unsigned short r2;     /* second register, used for 'long long'
-                              type. If not used, set to VT_CONST */
-    union {
-      struct { int jtrue, jfalse; }; /* forward jmps */
-      CValue c;         /* constant, if VT_CONST */
-    };
-    union {
-      struct { unsigned short cmp_op, cmp_r; }; /* VT_CMP operation */
-      struct Sym *sym;  /* symbol, if (VT_SYM | VT_CONST), or if */
-    };                  /* result of unary() for an identifier. */
-
-} SValue;
-
-/* symbol attributes */
-struct SymAttr {
-    unsigned short
-    aligned     : 5, /* alignment as log2+1 (0 == unspecified) */
-    packed      : 1,
-    weak        : 1,
-    visibility  : 2,
-    dllexport   : 1,
-    nodecorate  : 1,
-    dllimport   : 1,
-    addrtaken   : 1,
-    nodebug     : 1,
-    xxxx        : 2; /* not used */
-};
-
-/* function attributes or temporary attributes for parsing */
-struct FuncAttr {
-    unsigned
-    func_call   : 3, /* calling convention (0..5), see below */
-    func_type   : 2, /* FUNC_OLD/NEW/ELLIPSIS */
-    func_noreturn : 1, /* attribute((noreturn)) */
-    func_ctor   : 1, /* attribute((constructor)) */
-    func_dtor   : 1, /* attribute((destructor)) */
-    func_args   : 8, /* PE __stdcall args */
-    func_alwinl : 1, /* always_inline */
-    xxxx        : 15;
-};
-
 /* symbol management */
 typedef struct Sym {
     int v; /* symbol token */
-    unsigned short r; /* associated register or VT_CONST/VT_LOCAL and LVAL type */
-    struct SymAttr a; /* symbol attributes */
-    union {
-        struct {
-            int c; /* associated number or Elf symbol index */
-            union {
-                int sym_scope; /* scope level for locals */
-                int jnext; /* next jump label */
-                int jind; /* label position */
-                struct FuncAttr f; /* function attributes */
-                int auxtype; /* bitfield access type */
-            };
-        };
-        long long enum_val; /* enum constant if IS_ENUM_VAL */
-        struct Sym *cleanup_func;
-    };
+    unsigned char weak;
+    unsigned char visibility;
+    int c; /* Elf symbol index */
 
     CType type; /* associated type */
     union {
-        struct Sym *next; /* next related symbol (for fields and anoms) */
+        struct Sym *next; /* free-list link */
         int asm_label; /* associated asm label */
-        struct Sym *cleanupstate; /* in defined labels */
-        int *vla_array_str; /* vla array code */
     };
-    struct Sym *prev; /* prev symbol in stack */
-    union {
-        struct Sym *prev_tok; /* previous symbol for this token */
-        struct Sym *cleanup_sym; /* symbol from __attribute__((cleanup())) */
-        struct Sym *cleanup_label; /* label in 'pending_gotos' chain */
-    };
+    struct Sym *prev_tok; /* previous symbol for this token */
 } Sym;
 
 /* section definition */
@@ -357,41 +288,7 @@ typedef struct DLLReference {
 
 /* -------------------------------------------------- */
 
-#define SYM_STRUCT     0x40000000 /* struct/union/enum symbol space */
-#define SYM_FIELD      0x20000000 /* struct/union field symbol space */
 #define SYM_FIRST_ANOM 0x10000000 /* first anonymous sym */
-
-/* stored in 'Sym->f.func_type' field */
-#define FUNC_NEW       1 /* ansi function prototype */
-#define FUNC_OLD       2 /* old function prototype */
-#define FUNC_ELLIPSIS  3 /* ansi function prototype with ... */
-
-/* stored in 'Sym->f.func_call' field */
-#define FUNC_CDECL     0 /* standard c call */
-#define FUNC_STDCALL   1 /* pascal c call */
-#define FUNC_FASTCALL1 2 /* first param in %eax */
-#define FUNC_FASTCALL2 3 /* first parameters in %eax, %edx */
-#define FUNC_FASTCALL3 4 /* first parameter in %eax, %edx, %ecx */
-#define FUNC_FASTCALLW 5 /* first parameter in %ecx, %edx */
-#define FUNC_THISCALL  6 /* first param in %ecx */
-
-/* field 'Sym.t' for macros */
-#define MACRO_OBJ      0 /* object like macro */
-#define MACRO_FUNC     1 /* function like macro */
-#define MACRO_JOIN     2 /* macro uses ## */
-
-/* field 'Sym.r' for C labels */
-#define LABEL_DEFINED  0 /* label is defined */
-#define LABEL_FORWARD  1 /* label is forward defined */
-#define LABEL_DECLARED 2 /* label is declared but never used */
-#define LABEL_GONE     3 /* label isn't in scope, but not yet popped
-                            from local_label_stack (stmt exprs) */
-
-/* type_decl() types */
-#define TYPE_ABSTRACT  1 /* type without variable */
-#define TYPE_DIRECT    2 /* type with variable */
-#define TYPE_PARAM     4 /* type declares function parameter */
-#define TYPE_NEST      8 /* nested call to post_type */
 
 #define IO_BUF_SIZE 8192
 
@@ -422,17 +319,6 @@ typedef struct TokenString {
     char alloc;
 } TokenString;
 
-/* GNUC attribute definition */
-typedef struct AttributeDef {
-    struct SymAttr a;
-    struct FuncAttr f;
-    struct Section *section;
-    Sym *cleanup_func;
-    int alias_target; /* token */
-    int asm_label; /* associated asm label */
-    char attr_mode; /* __attribute__((__mode__(...))) */
-} AttributeDef;
-
 /* inline functions */
 typedef struct InlineFunc {
     TokenString *func_str;
@@ -440,13 +326,11 @@ typedef struct InlineFunc {
     char filename[1];
 } InlineFunc;
 
-#ifdef CONFIG_TCC_ASM
 typedef struct ExprValue {
     uint64_t v;
     Sym *sym;
     int pcrel;
 } ExprValue;
-#endif
 
 /* extra symbol attributes (not in symbol table) */
 struct sym_attr {
@@ -903,12 +787,7 @@ static inline int toup(int c) {
 
 #define SYM_POOL_NB (8192 / sizeof(Sym))
 
-ST_DATA Sym *global_stack;
-ST_DATA Sym *local_stack;
-ST_DATA Sym *local_label_stack;
-ST_DATA Sym *global_label_stack;
 ST_DATA CType int_type, func_old_type, char_pointer_type;
-ST_DATA SValue *vtop;
 ST_DATA int rsym, anon_sym, ind, loc;
 ST_DATA char debug_modes;
 
@@ -926,19 +805,12 @@ ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long s
 ST_FUNC void put_extern_sym(Sym *sym, Section *section, addr_t value, unsigned long size);
 ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type, addr_t addend);
 
-ST_INLN void sym_free(Sym *sym);
-ST_FUNC Sym *sym_push(int v, CType *type, int r, int c);
-ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
-ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c);
-ST_FUNC Sym *sym_find2(Sym *s, int v);
 ST_INLN Sym *sym_find(int v);
-ST_INLN Sym *struct_find(int v);
 
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
 /* ------------ tccasm.c ------------ */
 ST_FUNC int tcc_assemble(TCCState *s1);
-#ifdef CONFIG_TCC_ASM
 ST_FUNC Sym *get_asm_sym(int name, Sym *csym);
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 ST_FUNC int asm_int_expr(TCCState *s1);
@@ -946,7 +818,6 @@ ST_FUNC void gen_expr64(ExprValue *pe);
 ST_FUNC void gen_expr32(ExprValue *pe);
 ST_FUNC void asm_opcode(TCCState *s1, int opcode);
 ST_FUNC int asm_parse_regvar(int t);
-#endif
 
 /* ------------ tinyas support ------------ */
 ST_FUNC void tcc_debug_start(TCCState *s1);

@@ -20,7 +20,6 @@
 
 #define USING_GLOBALS
 #include "tcc.h"
-#ifdef CONFIG_TCC_ASM
 
 static Section *last_text_section; /* to handle .previous asm directive */
 
@@ -82,13 +81,9 @@ static int asm2cname(int v, int *addeddot)
 
 static Sym *asm_label_find(int v)
 {
-    Sym *sym;
     int addeddot;
     v = asm2cname(v, &addeddot);
-    sym = sym_find(v);
-    while (sym && sym->sym_scope && !(sym->type.t & VT_STATIC))
-        sym = sym->prev_tok;
-    return sym;
+    return sym_find(v);
 }
 
 static Sym *asm_label_push(int v)
@@ -716,9 +711,9 @@ static void asm_parse_directive(TCCState *s1, int global)
 	    if (tok1 != TOK_ASMDIR_hidden)
                 sym->type.t &= ~VT_STATIC;
             if (tok1 == TOK_ASMDIR_weak)
-                sym->a.weak = 1;
+                sym->weak = 1;
 	    else if (tok1 == TOK_ASMDIR_hidden)
-	        sym->a.visibility = STV_HIDDEN;
+	        sym->visibility = STV_HIDDEN;
             update_storage(sym);
             next();
 	} while (tok == ',');
@@ -1081,12 +1076,3 @@ ST_FUNC int tcc_assemble(TCCState *s1)
     tcc_debug_end(s1);
     return ret;
 }
-
-/********************************************************/
-#else
-ST_FUNC int tcc_assemble(TCCState *s1)
-{
-    (void)s1;
-    tcc_error("asm not supported");
-}
-#endif /* CONFIG_TCC_ASM */

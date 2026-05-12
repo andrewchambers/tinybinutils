@@ -8,7 +8,6 @@
 
 #ifdef TARGET_DEFS_ONLY
 
-#define CONFIG_TCC_ASM
 /* 32 general purpose + 32 SIMD/FP registers */
 #define NB_ASM_REGS 64
 
