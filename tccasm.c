@@ -229,6 +229,12 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
 		pe->pcrel = 0;
             }
             next();
+            if (tok == '@') {
+                next();
+                if (tok < TOK_IDENT)
+                    expect("identifier");
+                next();
+            }
         } else {
             tcc_error("bad expression syntax [%s]", get_tok_str(tok, &tokc));
         }

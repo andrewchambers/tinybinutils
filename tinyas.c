@@ -93,6 +93,12 @@ int main(int argc, char **argv)
             usage(stdout);
             ret = 0;
             goto out;
+        } else if (!strcmp(arg, "-")) {
+            if (input) {
+                fputs("tinyas: exactly one input file is supported\n", stderr);
+                goto out;
+            }
+            input = arg;
         } else if (arg[0] == '-') {
             fprintf(stderr, "tinyas: unsupported option: %s\n", arg);
             goto out;

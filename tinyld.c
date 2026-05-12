@@ -7,6 +7,8 @@ static void usage(FILE *out)
           "  -L DIR               add static library search path\n"
           "  -l NAME              link libNAME.a\n"
           "  -e SYMBOL            set entry symbol\n"
+          "  -r                   write relocatable object output\n"
+          "  -s                   accept strip flag\n"
           "  -Ttext=ADDR          set image base address\n"
           "  --whole-archive      load every object from following archives\n"
           "  --no-whole-archive   restore archive-on-demand loading\n",
@@ -81,6 +83,8 @@ int main(int argc, char **argv)
             set_string(&s->elf_entryname, argv[i]);
         } else if (!strncmp(arg, "--entry=", 8)) {
             set_string(&s->elf_entryname, arg + 8);
+        } else if (!strcmp(arg, "-r") || !strcmp(arg, "--relocatable")) {
+            s->output_type = TCC_OUTPUT_OBJ;
         } else if (!strncmp(arg, "-Ttext=", 7)) {
             if (parse_addr(arg + 7, &s->text_addr) < 0) {
                 fprintf(stderr, "tinyld: invalid -Ttext address: %s\n", arg + 7);
@@ -97,6 +101,9 @@ int main(int argc, char **argv)
             s->filetype |= AFF_WHOLE_ARCHIVE;
         } else if (!strcmp(arg, "--no-whole-archive")) {
             s->filetype &= ~AFF_WHOLE_ARCHIVE;
+        } else if (!strcmp(arg, "-s") || !strcmp(arg, "--strip-all")
+                   || !strcmp(arg, "--strip-debug")) {
+            continue;
         } else if (!strcmp(arg, "-static") || !strcmp(arg, "-nostdlib")) {
             continue;
         } else if (!strcmp(arg, "--start-group") || !strcmp(arg, "--end-group")) {

@@ -1513,6 +1513,8 @@ static int elf_output_obj(TCCState *s1, const char *filename)
 int tinyld_output_file(TCCState *s, const char *filename)
 {
     s->nb_errors = 0;
+    if (s->output_type == TCC_OUTPUT_OBJ)
+        return elf_output_obj(s, filename);
     return elf_output_file(s, filename);
 }
 

@@ -167,6 +167,15 @@ typedef struct Operand {
     ExprValue e;
 } Operand;
 
+#ifdef TCC_TARGET_X86_64
+static int imm_needs_movabs(const Operand *op)
+{
+    uint64_t signext32 = (uint64_t)(int64_t)(int32_t)op->e.v;
+
+    return !op->e.sym && op->e.v != signext32;
+}
+#endif
+
 static const uint8_t reg_to_size[9] = {
 /*
     [OP_REG8] = 0,
@@ -499,7 +508,8 @@ static void gen_disp32(ExprValue *pe)
 {
     Sym *sym = pe->sym;
     ElfSym *esym = elfsym(sym);
-    if (esym && esym->st_shndx == cur_text_section->sh_num) {
+    if (esym && esym->st_shndx == cur_text_section->sh_num
+        && ELFW(ST_BIND)(esym->st_info) == STB_LOCAL) {
         /* same section: we can output an absolute value. Note
            that the TCC compiler behaves differently here because
            it always outputs a relocation to ease (future) code
@@ -831,6 +841,14 @@ again:
             }
             if (op1 & OPT_EA)
                 v |= OP_EA;
+#ifdef TCC_TARGET_X86_64
+            if (pa->opcode == 0xb8 && op2 == OPT_IM64
+                && (ops[i].type & OP_IM32) && imm_needs_movabs(&ops[i])) {
+                op_type[i] = OP_IM64;
+                alltypes |= OP_IM64;
+                continue;
+            }
+#endif
 	    op_type[i] = v;
             if ((ops[i].type & v) == 0)
                 goto next;
@@ -1166,4 +1184,3 @@ again:
     if (pc)
         add32le(cur_text_section->data + pc - 4, pc - ind);
 }
-
