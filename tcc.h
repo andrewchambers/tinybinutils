@@ -110,13 +110,9 @@ extern long double strtold(const char *__nptr, char **__endptr);
 #endif
 
 typedef struct TCCState TCCState;
-typedef void *TCCReallocFunc(void *ptr, unsigned long size);
-typedef void TCCErrorFunc(void *opaque, const char *msg);
 
-#define TCC_OUTPUT_MEMORY      1
 #define TCC_OUTPUT_EXE         2
 #define TCC_OUTPUT_OBJ         3
-#define TCC_OUTPUT_PREPROCESS  5
 
 /* -------------------------------------------- */
 
@@ -491,18 +487,10 @@ struct sym_attr {
 
 struct TCCState {
     unsigned char verbose; /* if true, display some information during compilation */
-    unsigned char nostdinc; /* if true, no standard headers are added */
     unsigned char nostdlib; /* if true, no standard libraries are added */
-    unsigned char nostdlib_paths; /* if true, the default paths are not searched for libraries */
-    unsigned char nocommon; /* if true, do not use common symbols for .bss data */
-    unsigned char static_link; /* if true, static linking is performed */
-    unsigned char rdynamic; /* if true, all symbols are exported */
-    unsigned char symbolic; /* if true, resolve symbols in the current module first */
-    unsigned char znodelete; /* Set DF_1_NODELETE in dynamic section */
     unsigned char filetype; /* file type for compilation (NONE,C,ASM) */
     unsigned char optimize; /* only to #define __OPTIMIZE__ */
     unsigned char option_pthread; /* -pthread option */
-    unsigned char enable_new_dtags; /* -Wl,--enable-new-dtags */
     unsigned int  cversion; /* supported C ISO version, 199901 (the default), 201112, ... */
 
     /* C language options */
@@ -526,26 +514,11 @@ struct TCCState {
     #define WARN_ON  1 /* warning is on (-Woption) */
     unsigned char warn_num; /* temp var for tcc_warning_c() */
 
-    unsigned char option_r; /* option -r */
-    unsigned char do_bench; /* option -bench */
-    unsigned char just_deps; /* option -M  */
-    unsigned char gen_deps; /* option -MD  */
-    unsigned char include_sys_deps; /* option -MD  */
-    unsigned char gen_phony_deps; /* option -MP */
-
     /* compile with debug symbol (and use them if error during execution) */
     unsigned char do_debug;
-    unsigned char dwarf;
-    unsigned char do_backtrace;
-    unsigned char test_coverage;  /* generate test coverage code */
 
     /* use GNU C extensions */
     unsigned char gnu_ext;
-    /* use TinyCC extensions */
-    unsigned char tcc_ext;
-
-    unsigned char dflag; /* -dX value */
-    unsigned char Pflag; /* -P switch (LINE_MACRO_OUTPUT_FORMAT) */
 
     unsigned char nosse; /* For -mno-sse support. */
 
@@ -553,25 +526,10 @@ struct TCCState {
     addr_t text_addr; /* address of text section */
     unsigned section_align; /* section alignment */
 
-    char *tcc_lib_path; /* CONFIG_TCCDIR or -B option */
-    char *soname; /* as specified on the command line (-soname) */
-    char *rpath; /* as specified on the command line (-Wl,-rpath=) */
-    char *elfint; /* -Wl,-I... on command line */
     char *elf_entryname; /* "_start" unless set */
-    char *init_symbol; /* symbols to call at load-time (not used currently) */
-    char *fini_symbol; /* symbols to call at unload-time (not used currently) */
-    char *mapfile; /* create a mapfile (not used currently) */
 
     /* output type, see TCC_OUTPUT_XXX */
     int output_type;
-    /* output format, see TCC_OUTPUT_FORMAT_xxx */
-    int output_format;
-    /* nth test to run with -dt -run */
-    int run_test;
-
-    /* array of all loaded dlls (including those referenced by loaded dlls) */
-    DLLReference **loaded_dlls;
-    int nb_loaded_dlls;
 
     /* include paths */
     char **include_paths;
@@ -584,10 +542,6 @@ struct TCCState {
     char **library_paths;
     int nb_library_paths;
 
-    /* crt?.o object path */
-    char **crt_paths;
-    int nb_crt_paths;
-
     /* -D / -U options */
     CString cmdline_defs;
     /* -include options */
@@ -595,18 +549,12 @@ struct TCCState {
 
     /* error handling */
     const char *tool_name;
-    void *error_opaque;
-    void (*error_func)(void *opaque, const char *msg);
     int error_set_jmp_enabled;
     jmp_buf error_jmp_buf;
     int nb_errors;
 
     /* output file for preprocessing (-E) */
     FILE *ppfp;
-
-    /* for -MD/-MF: collected dependencies for this compilation */
-    char **target_deps;
-    int nb_target_deps;
 
     /* compilation */
     BufferedFile *include_stack[INCLUDE_STACK_SIZE];
@@ -684,7 +632,6 @@ struct TCCState {
     int total_idents;
     int total_lines;
     unsigned int total_bytes;
-    unsigned int total_output[4];
 
     /* used by tcc_load_ldscript */
     unsigned char *ld_p; /* text pointer */
@@ -692,22 +639,6 @@ struct TCCState {
     /* for warnings/errors for object files */
     const char *current_filename;
 
-    /* used by main and tcc_parse_args only */
-    struct filespec **files; /* files seen on command line */
-    int nb_files; /* number thereof */
-    int nb_libraries; /* number of libs thereof */
-    char *outfile; /* output filename */
-    char *deps_outfile; /* option -MF */
-    int argc;
-    char **argv;
-    /* -Wl options */
-    char **link_argv;
-    int link_argc, link_optind;
-};
-
-struct filespec {
-    char type;
-    char name[1];
 };
 
 /* The current value can be: */
@@ -894,9 +825,6 @@ enum tcc_token {
 /* ------------ libtcc.c ------------ */
 
 ST_DATA struct TCCState *tcc_state;
-ST_DATA void** stk_data;
-ST_DATA int nb_stk_data;
-ST_DATA int g_debug;
 ST_DATA const char * const target_machine_defs;
 
 /* public functions currently used by the tcc main function */
@@ -954,13 +882,6 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
 ST_FUNC void tcc_close(void);
 
-/* mark a memory pointer on stack for cleanup after errors */
-#define stk_push(p) dynarray_add(&stk_data, &nb_stk_data, p)
-#define stk_pop() (--nb_stk_data)
-/* mark CString on stack for cleanup errors */
-#define cstr_new_s(cstr) (cstr_new(cstr), stk_push(&(cstr)->data))
-#define cstr_free_s(cstr) (cstr_free(cstr), stk_pop())
-
 ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
 /* flags: */
 #define AFF_PRINT_ERROR     0x10 /* print error if file not found */
@@ -984,34 +905,13 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define FILE_NOT_FOUND -2
 #define FILE_NOT_RECOGNIZED -3 /* unrecognized file type */
 
-ST_FUNC int tcc_add_crt(TCCState *s, const char *filename);
 ST_FUNC int tcc_add_dll(TCCState *s, const char *filename, int flags);
-ST_FUNC int tcc_add_support(TCCState *s1, const char *filename);
-PUB_FUNC int tcc_add_file(TCCState *s, const char *filename);
 PUB_FUNC int tcc_add_library(TCCState *s, const char *libraryname);
-PUB_FUNC int tcc_add_library_path(TCCState *s, const char *pathname);
-PUB_FUNC void tcc_set_realloc(TCCReallocFunc *my_realloc);
-PUB_FUNC void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc *error_func);
-ST_FUNC void tcc_add_pragma_libs(TCCState *s1);
-PUB_FUNC int tcc_add_library_err(TCCState *s, const char *f);
-PUB_FUNC void tcc_print_stats(TCCState *s, unsigned total_time);
-PUB_FUNC int tcc_parse_args(TCCState *s, int *argc, char ***argv);
 #define tcc_fopen fopen
 #define tcc_fclose fclose
-ST_FUNC DLLReference *tcc_add_dllref(TCCState *s1, const char *dllname, int level);
 ST_FUNC char *tcc_load_text(int fd);
 /* for #pragma once */
 ST_FUNC int normalized_PATHCMP(const char *f1, const char *f2);
-
-/* tcc_parse_args return codes: */
-#define OPT_HELP 1
-#define OPT_HELP2 2
-#define OPT_V 3
-#define OPT_PRINT_DIRS 4
-#define OPT_AR 5
-#define OPT_IMPDEF 6
-#define OPT_M32 32
-#define OPT_M64 64
 
 /* ------------ tccpp.c ------------ */
 
@@ -1047,13 +947,6 @@ ST_DATA int pp_expr;
 #define IS_ID  2
 #define IS_NUM 4
 
-enum line_macro_output_format {
-    LINE_MACRO_OUTPUT_FORMAT_GCC,
-    LINE_MACRO_OUTPUT_FORMAT_NONE,
-    LINE_MACRO_OUTPUT_FORMAT_STD,
-    LINE_MACRO_OUTPUT_FORMAT_P10 = 11
-};
-
 ST_FUNC TokenSym *tok_alloc(const char *str, int len);
 ST_FUNC int tok_alloc_const(const char *str);
 ST_FUNC const char *get_tok_str(int v, CValue *cv);
@@ -1069,7 +962,6 @@ ST_FUNC void tok_str_add_tok(TokenString *s);
 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg);
 ST_FUNC void define_undef(Sym *s);
 ST_INLN Sym *define_find(int v);
-ST_FUNC void free_defines(Sym *b);
 ST_FUNC void parse_define(void);
 ST_FUNC void skip_to_eol(int warn);
 ST_FUNC void preprocess(int is_bof);
@@ -1080,10 +972,8 @@ ST_FUNC void preprocess_end(TCCState *s1);
 ST_FUNC void tccpp_new(TCCState *s);
 ST_FUNC void tccpp_delete(TCCState *s);
 ST_FUNC void tccpp_putfile(const char *filename);
-ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
-ST_FUNC void pp_error(CString *cs);
 
 
 /* space excluding newline */
@@ -1125,16 +1015,6 @@ ST_DATA int func_vc; /* stack address for implicit struct return storage */
 ST_DATA int func_ind; /* function start address */
 ST_DATA const char *funcname;
 
-ST_FUNC void tccgen_init(TCCState *s1);
-ST_FUNC int tccgen_compile(TCCState *s1);
-ST_FUNC void tccgen_finish(TCCState *s1);
-ST_FUNC void check_vstack(void);
-
-ST_INLN int is_float(int t);
-ST_FUNC int ieee_finite(double d);
-ST_FUNC int exact_log2p1(int i);
-ST_FUNC void test_lvalue(void);
-
 ST_FUNC ElfSym *elfsym(Sym *);
 ST_FUNC void update_storage(Sym *sym);
 ST_FUNC void put_extern_sym2(Sym *sym, int sh_num, addr_t value, unsigned long size, int can_add_underscore);
@@ -1147,47 +1027,10 @@ ST_FUNC void sym_pop(Sym **ptop, Sym *b, int keep);
 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c);
 ST_FUNC Sym *sym_find2(Sym *s, int v);
 ST_INLN Sym *sym_find(int v);
-ST_FUNC Sym *label_find(int v);
-ST_FUNC Sym *label_push(Sym **ptop, int v, int flags);
-ST_FUNC void label_pop(Sym **ptop, Sym *slast, int keep);
 ST_INLN Sym *struct_find(int v);
 
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
-ST_FUNC Sym *external_global_sym(int v, CType *type);
-ST_FUNC Sym *external_helper_sym(int v);
-ST_FUNC void vpush_helper_func(int v);
-ST_FUNC void vset(CType *type, int r, int v);
-ST_FUNC void vset_VT_CMP(int op);
-ST_FUNC void vpushi(int v);
-ST_FUNC void vpushv(SValue *v);
-ST_FUNC void vpushsym(CType *type, Sym *sym);
-ST_FUNC void vswap(void);
-ST_FUNC void vrott(int n);
-ST_FUNC void vrotb(int n);
-ST_FUNC void vrev(int n);
-ST_FUNC void vpop(void);
-ST_FUNC void save_reg(int r);
-ST_FUNC void save_reg_upstack(int r, int n);
-ST_FUNC int get_reg(int rc);
-ST_FUNC void save_regs(int n);
-ST_FUNC void gaddrof(void);
-ST_FUNC int gv(int rc);
-ST_FUNC void gv2(int rc1, int rc2);
-ST_FUNC void gen_op(int op);
-ST_FUNC int type_size(CType *type, int *a);
-ST_FUNC void mk_pointer(CType *type);
-ST_FUNC void vstore(void);
-ST_FUNC void inc(int post, int c);
-ST_FUNC CString* parse_mult_str(const char *msg);
-ST_FUNC CString* parse_asm_str(void);
-ST_FUNC void indir(void);
-ST_FUNC void unary(void);
-ST_FUNC void gexpr(void);
 ST_FUNC int expr_const(void);
-#if defined TCC_TARGET_X86_64
-ST_FUNC int classify_x86_64_va_arg(CType *ty);
-#endif
-ST_FUNC Sym *gfunc_set_param(Sym *s, int c, int byref);
 
 /* ------------ tccasm.c ------------ */
 ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess);
@@ -1219,8 +1062,6 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
 #endif
 
 /* ------------ tccelf.c ------------ */
-
-#define TCC_OUTPUT_FORMAT_ELF    0 /* default output format: ELF */
 
 #define ARMAG  "!<arch>\n"    /* For COFF and a.out archives */
 
@@ -1259,12 +1100,8 @@ ST_FUNC void *load_data(int fd, unsigned long file_offset, unsigned long size);
 ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
 ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
 ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
-ST_FUNC void add_array(TCCState *s1, const char *sec, int c);
-
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
 ST_FUNC addr_t get_sym_addr(TCCState *s, const char *name, int err, int forc);
-ST_FUNC void list_elf_symbols(TCCState *s, void *ctx,
-    void (*symbol_cb)(void *ctx, const char *name, const void *val));
 ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs);
 
 /* Browse each elem of type <type> in section <sec> starting at elem <startoff>

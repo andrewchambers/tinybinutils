@@ -1,49 +1,35 @@
 #include "tinyld.h"
 
 #undef free
+#undef malloc
 #undef realloc
 
 TCCState *tcc_state;
-void **stk_data;
-int nb_stk_data;
-int g_debug;
-
-static void *default_realloc(void *ptr, unsigned long size)
-{
-    void *new_ptr;
-
-    if (size == 0) {
-        free(ptr);
-        return NULL;
-    }
-    new_ptr = realloc(ptr, size);
-    if (!new_ptr) {
-        fputs("tinyld: out of memory\n", stderr);
-        exit(1);
-    }
-    return new_ptr;
-}
-
-static void *(*reallocator)(void *, unsigned long) = default_realloc;
-
-LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *my_realloc)
-{
-    reallocator = my_realloc ? my_realloc : default_realloc;
-}
 
 PUB_FUNC void tcc_free(void *ptr)
 {
-    reallocator(ptr, 0);
+    free(ptr);
 }
 
 PUB_FUNC void *tcc_malloc(unsigned long size)
 {
-    return reallocator(NULL, size);
+    void *ptr = malloc(size ? size : 1);
+
+    if (!ptr) {
+        fputs("tinyld: out of memory\n", stderr);
+        exit(1);
+    }
+    return ptr;
 }
 
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
 {
-    return reallocator(ptr, size);
+    ptr = realloc(ptr, size ? size : 1);
+    if (!ptr) {
+        fputs("tinyld: out of memory\n", stderr);
+        exit(1);
+    }
+    return ptr;
 }
 
 PUB_FUNC void *tcc_mallocz(unsigned long size)
@@ -117,12 +103,6 @@ PUB_FUNC void _tcc_warning(const char *fmt, ...)
     va_start(ap, fmt);
     tinyld_vmessage(0, fmt, ap);
     va_end(ap);
-}
-
-LIBTCCAPI void tcc_set_error_func(TCCState *s, void *opaque, TCCErrorFunc *fn)
-{
-    s->error_opaque = opaque;
-    s->error_func = fn;
 }
 
 ST_FUNC char *pstrcpy(char *buf, size_t buf_size, const char *s)
@@ -248,11 +228,7 @@ TinyLDState *tinyld_new(void)
 
     s->tool_name = "tinyld";
     s->output_type = TCC_OUTPUT_EXE;
-    s->output_format = TCC_OUTPUT_FORMAT_ELF;
-    s->static_link = 1;
-    s->nostdinc = 1;
     s->nostdlib = 1;
-    s->nocommon = 1;
     s->ppfp = stdout;
     tccelf_new(s);
     return s;
@@ -264,10 +240,7 @@ void tinyld_delete(TinyLDState *s)
         return;
     tccelf_delete(s);
     dynarray_reset(&s->library_paths, &s->nb_library_paths);
-    dynarray_reset(&s->crt_paths, &s->nb_crt_paths);
-    dynarray_reset(&s->loaded_dlls, &s->nb_loaded_dlls);
     tcc_free(s->elf_entryname);
-    tcc_free(s->outfile);
     tcc_free(s);
 }
 
@@ -275,11 +248,6 @@ int tinyld_add_library_path(TinyLDState *s, const char *path)
 {
     tinyld_split_path(s, &s->library_paths, &s->nb_library_paths, path);
     return 0;
-}
-
-LIBTCCAPI int tcc_add_library_path(TCCState *s, const char *path)
-{
-    return tinyld_add_library_path(s, path);
 }
 
 static int tinyld_add_binary(TCCState *s1, int flags, const char *filename, int fd)
@@ -330,11 +298,6 @@ int tinyld_add_file(TinyLDState *s, const char *filename)
     return tcc_add_file_internal(s, filename, s->filetype | AFF_PRINT_ERROR);
 }
 
-LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename)
-{
-    return tinyld_add_file(s, filename);
-}
-
 static int tinyld_add_library_internal(TCCState *s1, const char *fmt,
                                        const char *name, int flags)
 {
@@ -369,27 +332,4 @@ int tinyld_add_library(TinyLDState *s, const char *library_name)
 LIBTCCAPI int tcc_add_library(TCCState *s, const char *library_name)
 {
     return tinyld_add_library(s, library_name);
-}
-
-ST_FUNC int tcc_add_crt(TCCState *s1, const char *filename)
-{
-    return tcc_error_noabort("crt auto-loading is not supported: %s", filename);
-}
-
-ST_FUNC int tcc_add_support(TCCState *s1, const char *filename)
-{
-    return tcc_error_noabort("runtime support auto-loading is not supported: %s", filename);
-}
-
-ST_FUNC void tcc_add_pragma_libs(TCCState *s)
-{
-    (void)s;
-}
-
-ST_FUNC DLLReference *tcc_add_dllref(TCCState *s, const char *dllname, int level)
-{
-    (void)s;
-    (void)dllname;
-    (void)level;
-    return NULL;
 }

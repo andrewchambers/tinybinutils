@@ -660,11 +660,7 @@ TinyASState *tinyas_new(void)
 
     s->tool_name = "tinyas";
     s->output_type = TCC_OUTPUT_OBJ;
-    s->output_format = TCC_OUTPUT_FORMAT_ELF;
-    s->static_link = 1;
-    s->nostdinc = 1;
     s->nostdlib = 1;
-    s->nocommon = 1;
     s->dollars_in_identifiers = 1;
     s->cversion = 199901;
     s->ppfp = stdout;
@@ -686,7 +682,6 @@ void tinyas_delete(TinyASState *s)
     global_stack = local_stack = NULL;
     global_label_stack = local_label_stack = NULL;
     define_stack = NULL;
-    tcc_free(s->outfile);
     tcc_free(s);
 }
 
