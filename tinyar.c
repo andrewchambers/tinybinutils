@@ -5,7 +5,7 @@
  * standalone: it does not use libtcc or the tinyld linker state.
  */
 
-#include "elf.h"
+#include "tinyelf.h"
 
 #include <ctype.h>
 #include <errno.h>

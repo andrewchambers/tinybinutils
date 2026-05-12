@@ -74,7 +74,7 @@
 # error tinyld requires exactly one target: TCC_TARGET_X86_64, TCC_TARGET_ARM64, or TCC_TARGET_RISCV64
 #endif
 
-#include "elf.h"
+#include "tinyelf.h"
 
 #ifndef LIBTCCAPI
 # define LIBTCCAPI
@@ -509,8 +509,6 @@ ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
 #define FILE_NOT_FOUND -2
 
 PUB_FUNC int tcc_add_library(TCCState *s, const char *libraryname);
-#define tcc_fopen fopen
-#define tcc_fclose fclose
 
 /* ------------ tccpp.c ------------ */
 
@@ -702,10 +700,6 @@ static inline void add64le(unsigned char *p, int64_t x) {
 }
 
 #define ST_ASM_SET 0x04
-
-#define TCC_SEM(s)
-#define WAIT_SEM(p)
-#define POST_SEM(p)
 
 /********************************************************/
 #undef ST_DATA

@@ -8,7 +8,7 @@ AS_CFLAGS = $(CFLAGS) -Wno-sign-compare -Wno-implicit-fallthrough \
 PROGS = tinyld tinyld-x86_64 tinyld-aarch64 tinyld-riscv64 \
 	tinyas tinyas-x86_64 tinyas-aarch64 tinyas-riscv64 tinyar
 COMMON_SRCS = tinyld.c tinyld_support.c tccelf.c
-COMMON_DEPS = tcc.h tinyld.h elf.h x86_64-link.c arm64-link.c riscv64-link.c
+COMMON_DEPS = tcc.h tinyld.h tinyelf.h x86_64-link.c arm64-link.c riscv64-link.c
 AS_COMMON_SRCS = tinyas.c tinyld_support.c tinyas_support.c tccelf.c tccpp.c tccasm.c
 AS_DEPS = $(COMMON_DEPS) tcctok.h i386-tok.h arm64-tok.h riscv64-tok.h \
 	i386-asm.c x86_64-asm.h arm64-asm.c arm64-tok.h riscv64-asm.c riscv64-tok.h
@@ -78,7 +78,7 @@ build/as-riscv64/%.o: %.c $(AS_DEPS)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) -DTCC_TARGET_RISCV64 $(AS_CFLAGS) -c -o $@ $<
 
-tinyar.o: elf.h
+tinyar.o: tinyelf.h
 
 clean:
 	rm -rf build
