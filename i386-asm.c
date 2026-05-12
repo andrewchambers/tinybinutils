@@ -61,10 +61,10 @@ enum {
     OPT_REG32,  /* warning: value is hardcoded from TOK_ASM_xxx */
     OPT_REG64,  /* warning: value is hardcoded from TOK_ASM_xxx */
     OPT_MMX,    /* warning: value is hardcoded from TOK_ASM_xxx */
-    OPT_SSE,    /* warning: value is hardcoded from TOK_ASM_xxx */
     OPT_CR,     /* warning: value is hardcoded from TOK_ASM_xxx */
     OPT_TR,     /* warning: value is hardcoded from TOK_ASM_xxx */
     OPT_DB,     /* warning: value is hardcoded from TOK_ASM_xxx */
+    OPT_SSE,
     OPT_SEG,
     OPT_ST,
     OPT_REG8_LOW, /* %spl,%bpl,%sil,%dil, encoded like ah,ch,dh,bh, but
@@ -97,10 +97,10 @@ enum {
 #define OP_REG16  (1 << OPT_REG16)
 #define OP_REG32  (1 << OPT_REG32)
 #define OP_MMX    (1 << OPT_MMX)
-#define OP_SSE    (1 << OPT_SSE)
 #define OP_CR     (1 << OPT_CR)
 #define OP_TR     (1 << OPT_TR)
 #define OP_DB     (1 << OPT_DB)
+#define OP_SSE    (1 << OPT_SSE)
 #define OP_SEG    (1 << OPT_SEG)
 #define OP_ST     (1 << OPT_ST)
 #define OP_IM8    (1 << OPT_IM8)
@@ -346,6 +346,9 @@ static void parse_operand(TCCState *s1, Operand *op)
         } else if (tok >= TOK_ASM_dr0 && tok <= TOK_ASM_dr7) {
             op->type = OP_DB;
             op->reg = tok - TOK_ASM_dr0;
+        } else if (tok >= TOK_ASM_xmm0 && tok <= TOK_ASM_xmm15) {
+            op->type = OP_SSE;
+            op->reg = tok - TOK_ASM_xmm0;
         } else if (tok >= TOK_ASM_es && tok <= TOK_ASM_gs) {
             op->type = OP_SEG;
             op->reg = tok - TOK_ASM_es;
