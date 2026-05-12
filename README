@@ -1,63 +1,26 @@
 tinyld
 ======
 
-tinyld is a small collection of ELF-only tools forked from tcc:
-a static linker, standalone assemblers, and a static archive tool.
-The goal is to keep the object, archive, and ELF linking code small enough
-to use with other small compilers.
+tinyld is a small ELF-only toolset forked from tcc for use with small
+compilers. It contains:
 
-Current scope:
-
-- ELF executable output only
-- static linking only
-- relocatable object input
-- static archive input
-- a small GNU ld-script subset for INPUT(...) and GROUP(...)
-- x86_64, AArch64, and RISC-V 64-bit Linux targets
-- standalone assembler output as ELF relocatable `.o` files
+- `tinyld`: x86_64 static linker alias
+- `tinyld-x86_64`, `tinyld-aarch64`, `tinyld-riscv64`
+- `tinyas`: x86_64 assembler alias
+- `tinyas-x86_64`, `tinyas-aarch64`, `tinyas-riscv64`
+- `tinyar`: static archive tool
 
 Build:
 
     make
 
-Tools:
+Scope:
 
-- `tinyld`: alias for the x86_64 ELF static linker
-- `tinyld-x86_64`: x86_64 ELF static linker
-- `tinyld-aarch64`: AArch64 ELF static linker
-- `tinyld-riscv64`: RISC-V 64-bit ELF static linker
-- `tinyas`: alias for the x86_64 ELF assembler
-- `tinyas-x86_64`: x86_64 ELF assembler
-- `tinyas-aarch64`: AArch64 ELF assembler
-- `tinyas-riscv64`: RISC-V 64-bit ELF assembler
-- `tinyar`: small static archive creator/list/extractor for ELF64 `.o` files
-
-Example:
-
-    ./tinyld -static -nostdlib -L/path/to/musl/lib \
-        -o hello \
-        /path/to/musl/lib/crt1.o \
-        /path/to/musl/lib/crti.o \
-        hello.o \
-        -lc \
-        /path/to/musl/lib/crtn.o
-
-Archive example:
-
-    ./tinyar crs libhello.a hello.o helper.o
-    ./tinyld -static -nostdlib -L. -L/path/to/musl/lib \
-        -o hello \
-        /path/to/musl/lib/crt1.o \
-        /path/to/musl/lib/crti.o \
-        main.o \
-        -lhello \
-        -lc \
-        /path/to/musl/lib/crtn.o
-
-Assembler example:
-
-    ./tinyas-x86_64 -o start.o start.s
-    ./tinyld-x86_64 -static -nostdlib -o start start.o
+- ELF only
+- static linking only
+- relocatable `.o` and static `.a` input
+- x86_64, AArch64, and RISC-V 64-bit Linux targets
+- small GNU ld-script subset for `INPUT(...)` and `GROUP(...)`
 
 Unsupported by design:
 
@@ -65,4 +28,3 @@ Unsupported by design:
 - shared object output
 - PIE output
 - in-memory execution
-- tcc runtime support libraries
