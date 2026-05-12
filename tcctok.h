@@ -380,6 +380,7 @@
  DEF_ASMDIR(set)
  DEF_ASMDIR(skip)
  DEF_ASMDIR(space)
+ DEF_ASMDIR(zero)
  DEF_ASMDIR(string)
  DEF_ASMDIR(asciz)
  DEF_ASMDIR(ascii)

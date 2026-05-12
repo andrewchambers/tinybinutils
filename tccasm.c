@@ -450,6 +450,7 @@ static Sym* asm_new_label1(TCCState *s1, int label, int is_local,
     esym->st_value = value;
     if (is_local != 2)
         sym->type.t &= ~VT_EXTERN;
+    update_storage(sym);
     return sym;
 }
 
@@ -521,6 +522,7 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_p2align:
     case TOK_ASMDIR_skip:
     case TOK_ASMDIR_space:
+    case TOK_ASMDIR_zero:
         tok1 = tok;
         next();
         n = asm_int_expr(s1);
