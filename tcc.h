@@ -355,11 +355,7 @@ struct TCCState {
 /* token values */
 
 /* conditional ops */
-#define TOK_LAND  0x90
-#define TOK_LOR   0x91
 /* warning: the following compare tokens depend on i386 asm code */
-#define TOK_ULT 0x92
-#define TOK_UGE 0x93
 #define TOK_EQ  0x94
 #define TOK_NE  0x95
 #define TOK_ULE 0x96
@@ -373,42 +369,8 @@ struct TCCState {
 
 #define TOK_ISCOND(t) (t >= TOK_LAND && t <= TOK_GT)
 
-#define TOK_DEC     0x80 /* -- */
-#define TOK_MID     0x81 /* inc/dec, to void constant */
-#define TOK_INC     0x82 /* ++ */
-#define TOK_UDIV    0x83 /* unsigned division */
-#define TOK_UMOD    0x84 /* unsigned modulo */
-#define TOK_PDIV    0x85 /* fast division with undefined rounding for pointers */
-#define TOK_UMULL   0x86 /* unsigned 32x32 -> 64 mul */
-#define TOK_ADDC1   0x87 /* add with carry generation */
-#define TOK_ADDC2   0x88 /* add with carry use */
-#define TOK_SUBC1   0x89 /* add with carry generation */
-#define TOK_SUBC2   0x8a /* add with carry use */
 #define TOK_SHL     '<' /* shift left */
 #define TOK_SAR     '>' /* signed shift right */
-#define TOK_SHR     0x8b /* unsigned shift right */
-#define TOK_NEG     TOK_MID /* unary minus operation (for floats) */
-
-#define TOK_ARROW   0xa0 /* -> */
-#define TOK_DOTS    0xa1 /* three dots */
-#define TOK_TWODOTS 0xa2 /* C++ token ? */
-#define TOK_TWOSHARPS 0xa3 /* ## token */
-#define TOK_SOTYPE  0xa7 /* alias of '(' for parsing sizeof (type) */
-
-/* assignment operators */
-#define TOK_A_ADD   0xb0
-#define TOK_A_SUB   0xb1
-#define TOK_A_MUL   0xb2
-#define TOK_A_DIV   0xb3
-#define TOK_A_MOD   0xb4
-#define TOK_A_AND   0xb5
-#define TOK_A_OR    0xb6
-#define TOK_A_XOR   0xb7
-#define TOK_A_SHL   0xb8
-#define TOK_A_SAR   0xb9
-
-#define TOK_ASSIGN(t) (t >= TOK_A_ADD && t <= TOK_A_SAR)
-#define TOK_ASSIGN_OP(t) ("+-*/%&|^<>"[t - TOK_A_ADD])
 
 /* tokens that carry values (in additional token string space / tokc) --> */
 #define TOK_CCHAR   0xc0 /* char constant in tokc */
