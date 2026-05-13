@@ -89,6 +89,37 @@ static Sym* asm_section_sym(TCCState *s1, Section *sec)
     return sym ? sym : asm_new_label1(s1, label, 1, sec->sh_num, 0);
 }
 
+static void asm_expr_symbol(ExprValue *pe, int label)
+{
+    Sym *sym;
+    ElfSym *esym;
+
+    sym = get_asm_sym(label, NULL);
+    esym = elfsym(sym);
+    if (esym && esym->st_shndx == SHN_ABS) {
+        /* if absolute symbol, no need to put a symbol value */
+        pe->v = esym->st_value;
+        pe->sym = NULL;
+        pe->pcrel = 0;
+    } else {
+        pe->v = 0;
+        pe->sym = sym;
+        pe->pcrel = 0;
+    }
+    next();
+    if (tok == '@') {
+        const char *suffix;
+
+        next();
+        if (tok < TOK_IDENT)
+            expect("identifier");
+        suffix = get_tok_str(tok, NULL);
+        if (strcmp(suffix, "PLT"))
+            tcc_error("unsupported symbol suffix '@%s'", suffix);
+        next();
+    }
+}
+
 /* We do not use the C expression parser to handle symbols. Maybe the
    C expression parser could be tweaked to do so. */
 
@@ -166,29 +197,13 @@ static void asm_expr_unary(TCCState *s1, ExprValue *pe)
         pe->pcrel = 0;
         next();
         break;
+    case TOK_STR:
+        asm_expr_symbol(pe, tok_alloc_const(tokc.str.data));
+        break;
     default:
         if (tok >= TOK_IDENT) {
-	    ElfSym *esym;
             /* label case : if the label was not found, add one */
-	    sym = get_asm_sym(tok, NULL);
-	    esym = elfsym(sym);
-            if (esym && esym->st_shndx == SHN_ABS) {
-                /* if absolute symbol, no need to put a symbol value */
-                pe->v = esym->st_value;
-                pe->sym = NULL;
-		pe->pcrel = 0;
-            } else {
-                pe->v = 0;
-                pe->sym = sym;
-		pe->pcrel = 0;
-            }
-            next();
-            if (tok == '@') {
-                next();
-                if (tok < TOK_IDENT)
-                    expect("identifier");
-                next();
-            }
+            asm_expr_symbol(pe, tok);
         } else {
             tcc_error("bad expression syntax [%s]", get_tok_str(tok, &tokc));
         }
