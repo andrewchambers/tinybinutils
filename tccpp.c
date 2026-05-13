@@ -480,8 +480,6 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     p = cstr_buf.data;
 
     switch(v) {
-    case TOK_LCHAR:
-        cstr_ccat(&cstr_buf, 'L');
     case TOK_CCHAR:
         cstr_ccat(&cstr_buf, '\'');
         add_char(&cstr_buf, cv->i);
@@ -491,8 +489,6 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     case TOK_PPNUM:
     case TOK_PPSTR:
         return (char*)cv->str.data;
-    case TOK_LSTR:
-        cstr_ccat(&cstr_buf, 'L');
     case TOK_STR:
         cstr_ccat(&cstr_buf, '\"');
         if (v == TOK_STR) {
@@ -876,14 +872,12 @@ static void tok_str_add2(TokenString *s, int t, CValue *cv)
     str[len++] = t;
     switch(t) {
     case TOK_CCHAR:
-    case TOK_LCHAR:
     case TOK_LINENUM:
         str[len++] = cv->i;
         break;
     case TOK_PPNUM:
     case TOK_PPSTR:
     case TOK_STR:
-    case TOK_LSTR:
         {
             /* Insert the string into the int array. */
             size_t nb_words =
@@ -922,12 +916,10 @@ static inline void tok_get(int *t, const int **pp, CValue *cv)
 
     switch(*t = *p++) {
     case TOK_CCHAR:
-    case TOK_LCHAR:
     case TOK_LINENUM:
         cv->i = *p++;
         break;
     case TOK_STR:
-    case TOK_LSTR:
     case TOK_PPNUM:
     case TOK_PPSTR:
         cv->str.size = *p++;
@@ -942,7 +934,7 @@ static inline void tok_get(int *t, const int **pp, CValue *cv)
 
 
 /* evaluate escape codes in a string. */
-static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long)
+static void parse_escape_string(CString *outstr, const uint8_t *buf)
 {
     int c, n, i;
     const uint8_t *p;
@@ -990,16 +982,13 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                         c = c - '0';
                     else if (i >= 0)
                         expect("more hex digits in universal-character-name");
-                    else
-                        goto add_hex_or_ucn;
+                    else {
+                        c = n;
+                        goto add_char_nonext;
+                    }
                     n = (unsigned) n * 16 + c;
                     p++;
                 } while (--i);
-		if (is_long) {
-    add_hex_or_ucn:
-                    c = n;
-		    goto add_char_nonext;
-		}
                 cstr_u8cat(outstr, n);
                 continue;
             case 'a':
@@ -1035,83 +1024,20 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                     tcc_warning("unknown escape sequence: \'\\x%x\'", c);
                 break;
             }
-        } else if (is_long && c >= 0x80) {
-            /* assume we are processing UTF-8 sequence */
-            /* reference: The Unicode Standard, Version 10.0, ch3.9 */
-
-            int cont; /* count of continuation bytes */
-            int skip; /* how many bytes should skip when error occurred */
-            int i;
-
-            /* decode leading byte */
-            if (c < 0xC2) {
-	            skip = 1; goto invalid_utf8_sequence;
-            } else if (c <= 0xDF) {
-	            cont = 1; n = c & 0x1f;
-            } else if (c <= 0xEF) {
-	            cont = 2; n = c & 0xf;
-            } else if (c <= 0xF4) {
-	            cont = 3; n = c & 0x7;
-            } else {
-	            skip = 1; goto invalid_utf8_sequence;
-            }
-
-            /* decode continuation bytes */
-            for (i = 1; i <= cont; i++) {
-                int l = 0x80, h = 0xBF;
-
-                /* adjust limit for second byte */
-                if (i == 1) {
-                    switch (c) {
-                    case 0xE0: l = 0xA0; break;
-                    case 0xED: h = 0x9F; break;
-                    case 0xF0: l = 0x90; break;
-                    case 0xF4: h = 0x8F; break;
-                    }
-                }
-
-                if (p[i] < l || p[i] > h) {
-                    skip = i; goto invalid_utf8_sequence;
-                }
-
-                n = (n << 6) | (p[i] & 0x3f);
-            }
-
-            /* advance pointer */
-            p += 1 + cont;
-            c = n;
-            goto add_char_nonext;
-
-            /* error handling */
-        invalid_utf8_sequence:
-            tcc_warning("ill-formed UTF-8 subsequence starting with: \'\\x%x\'", c);
-            c = 0xFFFD;
-            p += skip;
-            goto add_char_nonext;
-
         }
         p++;
     add_char_nonext:
-        if (!is_long)
-            cstr_ccat(outstr, c);
-        else {
-            cstr_wccat(outstr, c);
-        }
+        cstr_ccat(outstr, c);
     }
     /* add a trailing '\0' */
-    if (!is_long)
-        cstr_ccat(outstr, '\0');
-    else
-        cstr_wccat(outstr, '\0');
+    cstr_ccat(outstr, '\0');
 }
 
 static void parse_string(const char *s, int len)
 {
     uint8_t buf[1000], *p = buf;
-    int is_long, sep;
+    int sep;
 
-    if ((is_long = *s == 'L'))
-        ++s, --len;
     sep = *s++;
     len -= 2;
     if (len >= sizeof buf)
@@ -1120,36 +1046,26 @@ static void parse_string(const char *s, int len)
     p[len] = 0;
 
     cstr_reset(&tokcstr);
-    parse_escape_string(&tokcstr, p, is_long);
+    parse_escape_string(&tokcstr, p);
     if (p != buf)
         tcc_free(p);
 
     if (sep == '\'') {
-        int char_size, i, n, c;
+        int i, n, c;
         /* XXX: make it portable */
-        if (!is_long)
-            tok = TOK_CCHAR, char_size = 1;
-        else
-            tok = TOK_LCHAR, char_size = sizeof(nwchar_t);
-        n = tokcstr.size / char_size - 1;
+        tok = TOK_CCHAR;
+        n = tokcstr.size - 1;
         if (n < 1)
             tcc_error("empty character constant");
         if (n > 1)
             tcc_warning("multi-character character constant");
-        for (c = i = 0; i < n; ++i) {
-            if (is_long)
-                c = ((nwchar_t *)tokcstr.data)[i];
-            else
-                c = (c << 8) | ((char *)tokcstr.data)[i];
-        }
+        for (c = i = 0; i < n; ++i)
+            c = (c << 8) | ((char *)tokcstr.data)[i];
         tokc.i = c;
     } else {
         tokc.str.size = tokcstr.size;
         tokc.str.data = tokcstr.data;
-        if (!is_long)
-            tok = TOK_STR;
-        else
-            tok = TOK_LSTR;
+        tok = TOK_STR;
     }
 }
 
@@ -1167,7 +1083,7 @@ static void parse_string(const char *s, int len)
 /* return next token without macro substitution */
 static void next_nomacro(void)
 {
-    int t, c, is_long, len;
+    int t, c, len;
     TokenSym *ts;
     uint8_t *p, *p1;
     unsigned int h;
@@ -1240,7 +1156,7 @@ maybe_newline:
     case 'y': case 'z': 
     case 'A': case 'B': case 'C': case 'D':
     case 'E': case 'F': case 'G': case 'H':
-    case 'I': case 'J': case 'K': 
+    case 'I': case 'J': case 'K': case 'L':
     case 'M': case 'N': case 'O': case 'P':
     case 'Q': case 'R': case 'S': case 'T':
     case 'U': case 'V': case 'W': case 'X':
@@ -1285,17 +1201,6 @@ maybe_newline:
         }
         tok = ts->tok;
         break;
-    case 'L':
-        t = p[1];
-        if (t == '\'' || t == '\"' || t == '\\') {
-            PEEKC(c, p);
-            if (c == '\'' || c == '\"') {
-                is_long = 1;
-                goto str_const;
-            }
-            *--p = c = 'L';
-        }
-        goto parse_ident_fast;
 
     case '0': case '1': case '2': case '3':
     case '4': case '5': case '6': case '7':
@@ -1344,11 +1249,7 @@ maybe_newline:
         break;
     case '\'':
     case '\"':
-        is_long = 0;
-    str_const:
         cstr_reset(&tokcstr);
-        if (is_long)
-            cstr_ccat(&tokcstr, 'L');
         cstr_ccat(&tokcstr, c);
         p = parse_pp_string(p, c, &tokcstr);
         cstr_ccat(&tokcstr, c);
