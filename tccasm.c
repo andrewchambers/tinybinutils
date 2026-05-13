@@ -1,5 +1,5 @@
 /*
- *  GAS like assembler for TCC
+ *  GAS-like assembler
  * 
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
@@ -23,7 +23,7 @@
 
 static Section *last_text_section; /* to handle .previous asm directive */
 
-static int tcc_assemble_internal(TCCState *s1, int global);
+static int tinyas_assemble_internal(TCCState *s1, int global);
 static Sym* asm_new_label(TCCState *s1, int label, int is_local);
 static Sym* asm_new_label1(TCCState *s1, int label, int is_local, int sh_num, int value);
 
@@ -67,15 +67,8 @@ static Sym *asm_label_push(int v)
 }
 
 /* Return a symbol we can use inside the assembler, having name NAME.
-   Symbols from asm and C source share a namespace.  If we generate
-   an asm symbol it's also a (file-global) C symbol, but it's
-   either not accessible by name (like "L.123"), or its type information
-   is such that it's not usable without a proper C declaration.
-
-   Sometimes we need symbols accessible by name from asm, which
-   are anonymous in C, in this case CSYM can be used to transfer
-   all information from that symbol to the (possibly newly created)
-   asm symbol.  */
+   Internal labels are kept in the same token table as public assembler
+   symbols, but names such as "L.123" are not externally visible.  */
 ST_FUNC Sym* get_asm_sym(int name, Sym *csym)
 {
     Sym *sym = asm_label_find(name);
@@ -335,8 +328,8 @@ static inline void asm_expr_cmp(TCCState *s1, ExprValue *pe)
     asm_expr_sum(s1, pe);
     for(;;) {
         op = tok;
-	if (op != TOK_EQ && op != TOK_NE
-	    && (op > TOK_GT || op < TOK_ULE))
+        if (op != TOK_EQ && op != TOK_NE && op != TOK_LT &&
+            op != TOK_GE && op != TOK_LE && op != TOK_GT)
             break;
         next();
         asm_expr_sum(s1, &e2);
@@ -643,7 +636,7 @@ static void asm_parse_directive(TCCState *s1, int global)
             tok_str_add(init_str, TOK_EOF);
             begin_token_stream(init_str, 1);
             while (repeat-- > 0) {
-                tcc_assemble_internal(s1, global);
+                tinyas_assemble_internal(s1, global);
                 token_stream_ptr = init_str->str;
             }
             end_token_stream();
@@ -907,7 +900,7 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_code64:
         next();
         break;
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
     case TOK_ASMDIR_option:
         next();
         switch(tok){
@@ -951,10 +944,10 @@ static void asm_parse_directive(TCCState *s1, int global)
 	    asm_expr(s1, &e);
 	    skip(',');
 	    reloc_name = get_tok_str(tok, NULL);
-#if defined(TCC_TARGET_ARM64)
+#if defined(TINY_TARGET_ARM64)
 	    if (!strcmp(reloc_name, "R_AARCH64_CALL26"))
 	        reloc_type = R_AARCH64_CALL26;
-#elif defined(TCC_TARGET_RISCV64)
+#elif defined(TINY_TARGET_RISCV64)
 	    if (!strcmp(reloc_name, "R_RISCV_CALL") || !strcmp(reloc_name, "R_RISCV_CALL_PLT"))
 	        reloc_type = R_RISCV_CALL;
 	    else if (!strcmp(reloc_name, "R_RISCV_BRANCH"))
@@ -990,7 +983,7 @@ static void asm_parse_directive(TCCState *s1, int global)
 
 
 /* assemble a file */
-static int tcc_assemble_internal(TCCState *s1, int global)
+static int tinyas_assemble_internal(TCCState *s1, int global)
 {
     int opcode;
     int saved_parse_flags = parse_flags;
@@ -1002,7 +995,7 @@ static int tcc_assemble_internal(TCCState *s1, int global)
             break;
         parse_flags |= PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
     redo:
-#if !defined(TCC_TARGET_ARM64)
+#if !defined(TINY_TARGET_ARM64)
         if (tok == '#') {
             /* horrible gas comment */
             while (tok != TOK_LINEFEED)
@@ -1050,14 +1043,14 @@ static int tcc_assemble_internal(TCCState *s1, int global)
 }
 
 /* Assemble the current file */
-ST_FUNC int tcc_assemble(TCCState *s1)
+ST_FUNC int tinyas_assemble(TCCState *s1)
 {
     int ret;
     /* default section is text */
     cur_text_section = text_section;
     ind = cur_text_section->data_offset;
     nocode_wanted = 0;
-    ret = tcc_assemble_internal(s1, 1);
+    ret = tinyas_assemble_internal(s1, 1);
     cur_text_section->data_offset = ind;
     return ret;
 }

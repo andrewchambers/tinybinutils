@@ -1,6 +1,6 @@
 /*************************************************************/
 /*
- *  RISCV64 assembler for TCC
+ *  RISC-V 64 assembler for tinyas
  *
  */
 

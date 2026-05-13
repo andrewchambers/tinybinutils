@@ -1,8 +1,6 @@
 #define USING_GLOBALS
 #include "tinyld.h"
 
-#undef free
-
 int ind;
 int nocode_wanted;
 
@@ -10,12 +8,7 @@ static Sym *sym_free_first;
 static void **sym_pools;
 static int nb_sym_pools;
 
-void libc_free(void *ptr)
-{
-    free(ptr);
-}
-
-ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
+ST_FUNC void tinyas_open_bf(TCCState *s1, const char *filename, int initlen)
 {
     BufferedFile *bf;
     int buflen = initlen ? initlen : IO_BUF_SIZE;
@@ -32,7 +25,7 @@ ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen)
     tok_flags = TOK_FLAG_BOL;
 }
 
-ST_FUNC void tcc_close(void)
+ST_FUNC void tinyas_close(void)
 {
     BufferedFile *bf = file;
 
@@ -44,7 +37,7 @@ ST_FUNC void tcc_close(void)
     tcc_free(bf);
 }
 
-ST_FUNC int tcc_open(TCCState *s1, const char *filename)
+ST_FUNC int tinyas_open(TCCState *s1, const char *filename)
 {
     int fd;
 
@@ -56,7 +49,7 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
     }
     if (fd < 0)
         return -1;
-    tcc_open_bf(s1, filename, 0);
+    tinyas_open_bf(s1, filename, 0);
     file->fd = fd;
     return 0;
 }
@@ -197,17 +190,17 @@ ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
 
 ST_FUNC void gen_fill_nops(int bytes)
 {
-#if defined TCC_TARGET_X86_64
+#if defined TINY_TARGET_X86_64
     while (bytes-- > 0)
         g(0x90);
-#elif defined TCC_TARGET_ARM64
+#elif defined TINY_TARGET_ARM64
     while (bytes >= 4) {
         gen_le32(0xd503201f);
         bytes -= 4;
     }
     while (bytes-- > 0)
         g(0);
-#elif defined TCC_TARGET_RISCV64
+#elif defined TINY_TARGET_RISCV64
     while (bytes >= 4) {
         gen_le32(0x00000013);
         bytes -= 4;
@@ -259,8 +252,8 @@ TinyASState *tinyas_new(void)
     TCCState *s = tcc_mallocz(sizeof(*s));
 
     s->tool_name = "tinyas";
-    s->output_type = TCC_OUTPUT_OBJ;
-    tccelf_new(s);
+    s->output_type = TINY_OUTPUT_OBJ;
+    elf_state_new(s);
     return s;
 }
 
@@ -268,7 +261,7 @@ void tinyas_delete(TinyASState *s)
 {
     if (!s)
         return;
-    tccelf_delete(s);
+    elf_state_delete(s);
     dynarray_reset(&sym_pools, &nb_sym_pools);
     sym_free_first = NULL;
     tcc_free(s);
@@ -282,19 +275,19 @@ int tinyas_assemble_file(TinyASState *s, const char *filename)
     tcc_enter_state(s);
     s->error_set_jmp_enabled = 1;
     if (setjmp(s->error_jmp_buf) == 0) {
-        if (tcc_open(s, filename) < 0) {
+        if (tinyas_open(s, filename) < 0) {
             tcc_error_noabort("file '%s' not found", filename);
             goto out;
         }
-        tcc_lexer_start(s);
+        tinyas_lexer_start(s);
         started = 1;
-        ret = tcc_assemble(s);
+        ret = tinyas_assemble(s);
         if (s->nb_errors)
             ret = -1;
     }
 out:
     if (started || file)
-        tcc_lexer_end(s);
+        tinyas_lexer_end(s);
     s->error_set_jmp_enabled = 0;
     tcc_exit_state(s);
     return ret;

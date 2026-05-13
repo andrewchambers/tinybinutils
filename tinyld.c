@@ -84,7 +84,7 @@ int main(int argc, char **argv)
         } else if (!strncmp(arg, "--entry=", 8)) {
             set_string(&s->elf_entryname, arg + 8);
         } else if (!strcmp(arg, "-r") || !strcmp(arg, "--relocatable")) {
-            s->output_type = TCC_OUTPUT_OBJ;
+            s->output_type = TINY_OUTPUT_OBJ;
         } else if (!strncmp(arg, "-Ttext=", 7)) {
             if (parse_addr(arg + 7, &s->text_addr) < 0) {
                 fprintf(stderr, "tinyld: invalid -Ttext address: %s\n", arg + 7);

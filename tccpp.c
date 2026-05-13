@@ -1,5 +1,5 @@
 /*
- *  TCC - Tiny C Compiler
+ *  tinyas lexer
  * 
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
@@ -49,13 +49,15 @@ static TokenString unget_buf;
 static unsigned char isidnum_table[256 - CH_EOF];
 static void next_nomacro(void);
 static void parse_string(const char *p, int len);
+static void lexer_new(TCCState *s);
+static void lexer_delete(TCCState *s);
 
 static struct TinyAlloc *toksym_alloc;
 static struct TinyAlloc *tokstr_alloc;
 
 static TokenString *token_stream_stack;
 
-static const char tcc_keywords[] = 
+static const char asm_tokens[] =
 #define DEF(id, str) str "\0"
 #include "tcctok.h"
 #undef DEF
@@ -63,10 +65,7 @@ static const char tcc_keywords[] =
 
 /* WARNING: the content of this string encodes token numbers */
 static const unsigned char tok_two_chars[] =
-/* outdated -- gr
-    "<=\236>=\235!=\225&&\240||\241++\244--\242==\224<<\1>>\2+=\253"
-    "-=\255*=\252/=\257%=\245&=\246^=\336|=\374->\313..\250##\266";
-*/{
+{
     '<','=', TOK_LE,
     '>','=', TOK_GE,
     '!','=', TOK_NE,
@@ -387,35 +386,6 @@ ST_FUNC void cstr_reset(CString *cstr)
     cstr->size = 0;
 }
 
-ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap)
-{
-    va_list v;
-    int len, size = 80;
-    for (;;) {
-        size += cstr->size;
-        if (size > cstr->size_allocated)
-            cstr_realloc(cstr, size);
-        size = cstr->size_allocated - cstr->size;
-        va_copy(v, ap);
-        len = vsnprintf(cstr->data + cstr->size, size, fmt, v);
-        va_end(v);
-        if (len >= 0 && len < size)
-            break;
-        size *= 2;
-    }
-    cstr->size += len;
-    return len;
-}
-
-ST_FUNC int cstr_printf(CString *cstr, const char *fmt, ...)
-{
-    va_list ap; int len;
-    va_start(ap, fmt);
-    len = cstr_vprintf(cstr, fmt, ap);
-    va_end(ap);
-    return len;
-}
-
 /* XXX: unicode ? */
 static void add_char(CString *cstr, int c)
 {
@@ -647,7 +617,7 @@ static int handle_stray_noerror(int err)
                 *--file->buf_ptr = '\r';
             }
             if (err)
-                tcc_error("stray '\\' in program");
+                tcc_error("stray '\\' in input");
             /* may take advantage of 'BufferedFile.unget[4}' */
             return *--file->buf_ptr = '\\';
         }
@@ -1247,7 +1217,7 @@ maybe_newline:
         goto keep_tok_flags;
 
     case '#':
-#ifndef TCC_TARGET_ARM64
+#ifndef TINY_TARGET_ARM64
         if (parse_flags & PARSE_FLAG_ASM_FILE) {
             p = parse_line_comment(p - 1);
             goto redo_no_start;
@@ -1528,22 +1498,22 @@ ST_INLN void unget_tok(int last_tok)
 /* ------------------------------------------------------------------------- */
 /* init lexer */
 
-ST_FUNC void tcc_lexer_start(TCCState *s1)
+ST_FUNC void tinyas_lexer_start(TCCState *s1)
 {
-    tccpp_new(s1);
+    lexer_new(s1);
     set_idnum('$', 0);
     set_idnum('.', IS_ID);
     parse_flags = PARSE_FLAG_ASM_FILE;
 }
 
-ST_FUNC void tcc_lexer_end(TCCState *s1)
+ST_FUNC void tinyas_lexer_end(TCCState *s1)
 {
     while (token_stream_stack)
         end_token_stream();
     token_stream_ptr = NULL;
     while (file)
-        tcc_close();
-    tccpp_delete(s1);
+        tinyas_close();
+    lexer_delete(s1);
 }
 
 
@@ -1554,7 +1524,7 @@ ST_FUNC int set_idnum(int c, int val)
     return prev;
 }
 
-ST_FUNC void tccpp_new(TCCState *s)
+static void lexer_new(TCCState *s)
 {
     int i, c;
     const char *p, *r;
@@ -1584,7 +1554,7 @@ ST_FUNC void tccpp_new(TCCState *s)
     tok_str_realloc(&unget_buf, TOKSTR_MAX_SIZE);
 
     tok_ident = TOK_IDENT;
-    p = tcc_keywords;
+    p = asm_tokens;
     while (*p) {
         r = p;
         for(;;) {
@@ -1597,7 +1567,7 @@ ST_FUNC void tccpp_new(TCCState *s)
     }
 }
 
-ST_FUNC void tccpp_delete(TCCState *s)
+static void lexer_delete(TCCState *s)
 {
     int i, n;
 

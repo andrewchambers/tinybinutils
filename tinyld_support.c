@@ -127,18 +127,7 @@ ST_FUNC char *pstrcat(char *buf, size_t buf_size, const char *s)
     return buf;
 }
 
-ST_FUNC char *pstrncpy(char *out, size_t buf_size, const char *s, size_t num)
-{
-    if (buf_size == 0)
-        return out;
-    if (num >= buf_size)
-        num = buf_size - 1;
-    memcpy(out, s, num);
-    out[num] = '\0';
-    return out;
-}
-
-PUB_FUNC char *tcc_basename(const char *name)
+PUB_FUNC char *tiny_basename(const char *name)
 {
     const char *p = name + strlen(name);
 
@@ -147,9 +136,9 @@ PUB_FUNC char *tcc_basename(const char *name)
     return (char *)p;
 }
 
-PUB_FUNC char *tcc_fileextension(const char *name)
+PUB_FUNC char *tiny_fileextension(const char *name)
 {
-    char *base = tcc_basename(name);
+    char *base = tiny_basename(name);
     char *ext = strrchr(base, '.');
 
     return ext ? ext : base + strlen(base);
@@ -210,8 +199,8 @@ TinyLDState *tinyld_new(void)
     TCCState *s = tcc_mallocz(sizeof(*s));
 
     s->tool_name = "tinyld";
-    s->output_type = TCC_OUTPUT_EXE;
-    tccelf_new(s);
+    s->output_type = TINY_OUTPUT_EXE;
+    elf_state_new(s);
     return s;
 }
 
@@ -219,7 +208,7 @@ void tinyld_delete(TinyLDState *s)
 {
     if (!s)
         return;
-    tccelf_delete(s);
+    elf_state_delete(s);
     dynarray_reset(&s->library_paths, &s->nb_library_paths);
     tcc_free(s->elf_entryname);
     tcc_free(s);
@@ -239,14 +228,14 @@ static int tinyld_add_binary(TCCState *s1, int flags, const char *filename, int 
     int ret;
 
     s1->current_filename = filename;
-    obj_type = tcc_object_type(fd, &ehdr);
+    obj_type = tinyld_object_type(fd, &ehdr);
     lseek(fd, 0, SEEK_SET);
     switch (obj_type) {
     case AFF_BINTYPE_REL:
-        ret = tcc_load_object_file(s1, fd, 0);
+        ret = tinyld_load_object_file(s1, fd, 0);
         break;
     case AFF_BINTYPE_AR:
-        ret = tcc_load_archive(s1, fd, !(flags & AFF_WHOLE_ARCHIVE));
+        ret = tinyld_load_archive(s1, fd, !(flags & AFF_WHOLE_ARCHIVE));
         break;
     case AFF_BINTYPE_DYN:
         ret = tcc_error_noabort("%s: dynamic libraries are not supported", filename);
@@ -260,7 +249,7 @@ static int tinyld_add_binary(TCCState *s1, int flags, const char *filename, int 
     return ret;
 }
 
-ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags)
+ST_FUNC int tinyld_add_file_internal(TCCState *s1, const char *filename, int flags)
 {
     int fd = open(filename, O_RDONLY | O_BINARY);
 
@@ -278,7 +267,7 @@ int tinyld_add_file(TinyLDState *s, const char *filename)
 
     if (s->whole_archive)
         flags |= AFF_WHOLE_ARCHIVE;
-    return tcc_add_file_internal(s, filename, flags);
+    return tinyld_add_file_internal(s, filename, flags);
 }
 
 static int tinyld_add_library_internal(TCCState *s1, const char *fmt,
@@ -289,7 +278,7 @@ static int tinyld_add_library_internal(TCCState *s1, const char *fmt,
 
     for (i = 0; i < s1->nb_library_paths; i++) {
         snprintf(path, sizeof(path), fmt, s1->library_paths[i], name);
-        if (tcc_add_file_internal(s1, path, flags & ~AFF_PRINT_ERROR) != FILE_NOT_FOUND)
+        if (tinyld_add_file_internal(s1, path, flags & ~AFF_PRINT_ERROR) != FILE_NOT_FOUND)
             return s1->nb_errors ? -1 : 0;
     }
     if (flags & AFF_PRINT_ERROR)
@@ -306,9 +295,4 @@ int tinyld_add_library(TinyLDState *s, const char *library_name)
                                            flags | AFF_PRINT_ERROR);
     return tinyld_add_library_internal(s, "%s/lib%s.a", library_name,
                                        flags | AFF_PRINT_ERROR);
-}
-
-LIBTCCAPI int tcc_add_library(TCCState *s, const char *library_name)
-{
-    return tinyld_add_library(s, library_name);
 }

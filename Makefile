@@ -56,27 +56,27 @@ tinyar: tinyar.o
 
 build/x86_64/%.o: %.c $(COMMON_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) -DTCC_TARGET_X86_64 $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) -DTINY_TARGET_X86_64 $(CFLAGS) -c -o $@ $<
 
 build/aarch64/%.o: %.c $(COMMON_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) -DTCC_TARGET_ARM64 $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) -DTINY_TARGET_ARM64 $(CFLAGS) -c -o $@ $<
 
 build/riscv64/%.o: %.c $(COMMON_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) -DTCC_TARGET_RISCV64 $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) -DTINY_TARGET_RISCV64 $(CFLAGS) -c -o $@ $<
 
 build/as-x86_64/%.o: %.c $(AS_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) -DTCC_TARGET_X86_64 $(AS_CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) -DTINY_TARGET_X86_64 $(AS_CFLAGS) -c -o $@ $<
 
 build/as-aarch64/%.o: %.c $(AS_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) -DTCC_TARGET_ARM64 $(AS_CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) -DTINY_TARGET_ARM64 $(AS_CFLAGS) -c -o $@ $<
 
 build/as-riscv64/%.o: %.c $(AS_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) -DTCC_TARGET_RISCV64 $(AS_CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) -DTINY_TARGET_RISCV64 $(AS_CFLAGS) -c -o $@ $<
 
 tinyar.o: tinyelf.h
 

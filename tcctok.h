@@ -38,7 +38,7 @@
  DEF_ASMDIR(org)
  DEF_ASMDIR(quad)
  DEF_ASMDIR(code64)
-#if defined(TCC_TARGET_RISCV64)
+#if defined(TINY_TARGET_RISCV64)
  DEF_ASMDIR(option)
 #endif
  DEF_ASMDIR(short)
@@ -48,14 +48,14 @@
  DEF_ASMDIR(reloc)
  DEF_ASMDIR(section)    /* must be last directive */
 
-#if defined TCC_TARGET_X86_64
+#if defined TINY_TARGET_X86_64
 #include "i386-tok.h"
 #endif
 
-#if defined TCC_TARGET_ARM64
+#if defined TINY_TARGET_ARM64
 #include "arm64-tok.h"
 #endif
 
-#if defined TCC_TARGET_RISCV64
+#if defined TINY_TARGET_RISCV64
 #include "riscv64-tok.h"
 #endif

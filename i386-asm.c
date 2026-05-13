@@ -1,5 +1,5 @@
 /*
- *  i386 specific functions for TCC assembler
+ *  x86_64-specific functions for tinyas
  *
  *  Copyright (c) 2001, 2002 Fabrice Bellard
  *  Copyright (c) 2009 Frédéric Feret (x86_64 support)
@@ -450,7 +450,6 @@ static void parse_operand(TCCState *s1, Operand *op)
     op->type |= indir;
 }
 
-/* XXX: unify with C code output ? */
 ST_FUNC void gen_expr32(ExprValue *pe)
 {
     if (pe->pcrel)
@@ -461,17 +460,13 @@ ST_FUNC void gen_expr32(ExprValue *pe)
 	gen_addr32(pe->sym ? VT_SYM : 0, pe->sym, pe->v);
 }
 
-/* XXX: unify with C code output ? */
 static void gen_disp32(ExprValue *pe)
 {
     Sym *sym = pe->sym;
     ElfSym *esym = elfsym(sym);
     if (esym && esym->st_shndx == cur_text_section->sh_num
         && ELFW(ST_BIND)(esym->st_info) == STB_LOCAL) {
-        /* same section: we can output an absolute value. Note
-           that the TCC compiler behaves differently here because
-           it always outputs a relocation to ease (future) code
-           elimination in the linker */
+        /* same section: we can output an absolute value. */
         gen_le32(pe->v + esym->st_value - ind - 4);
     } else {
         if (sym && sym->type.t == VT_VOID) {

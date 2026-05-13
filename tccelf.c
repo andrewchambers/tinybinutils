@@ -1,5 +1,5 @@
 /*
- *  ELF file handling for TCC
+ *  ELF file handling for tinyld/tinyas
  *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
@@ -31,7 +31,7 @@ static const char rdata[] = ".data.ro";
 
 /* ------------------------------------------------------------------------- */
 
-ST_FUNC void tccelf_new(TCCState *s)
+ST_FUNC void elf_state_new(TCCState *s)
 {
     TCCState *s1 = s;
 
@@ -64,7 +64,7 @@ ST_FUNC void free_section(Section *s)
     s->data_allocated = s->data_offset = 0;
 }
 
-ST_FUNC void tccelf_delete(TCCState *s1)
+ST_FUNC void elf_state_delete(TCCState *s1)
 {
     int i;
 
@@ -78,7 +78,7 @@ ST_FUNC void tccelf_delete(TCCState *s1)
     dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
 
     tcc_free(s1->sym_attrs);
-    symtab_section = NULL; /* for tccrun.c:rt_printline() */
+    symtab_section = NULL;
 }
 
 static void update_relocs(TCCState *s1, Section *s, int *old_to_new_syms, int first_sym);
@@ -545,9 +545,8 @@ static void update_relocs(TCCState *s1, Section *s, int *old_to_new_syms, int fi
 }
 
 /* In an ELF file symbol table, the local symbols must appear below
-   the global and weak ones. Since TCC cannot sort it while generating
-   the code, we must do it after. All the relocation tables are also
-   modified to take into account the symbol table sorting */
+   the global and weak ones. Symbols are generated incrementally, so sort
+   them before output and update relocation tables to match. */
 static void sort_syms(TCCState *s1, Section *s)
 {
     int *old_to_new_syms;
@@ -649,7 +648,7 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
         relocate(s1, rel, type, ptr, addr, tgt);
     }
 
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
     dynarray_reset(&s1->pcrel_hi_entries, &s1->nb_pcrel_hi_entries);
 #endif
 }
@@ -787,12 +786,12 @@ redo:
                     continue;
             }
 
-#ifdef TCC_TARGET_X86_64
+#ifdef TINY_TARGET_X86_64
             if ((type == R_X86_64_PLT32 || type == R_X86_64_PC32) &&
 		sym->st_shndx != SHN_UNDEF &&
                 (ELFW(ST_VISIBILITY)(sym->st_other) != STV_DEFAULT ||
 		 ELFW(ST_BIND)(sym->st_info) == STB_LOCAL ||
-		 s1->output_type & TCC_OUTPUT_EXE)) {
+		 s1->output_type & TINY_OUTPUT_EXE)) {
 		if (pass != 0)
 		    continue;
                 rel->r_info = ELFW(R_INFO)(sym_index, R_X86_64_PC32);
@@ -867,7 +866,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
 /* add various standard linker symbols (must be done after the
    sections are filled (for example after allocating common
    symbols)) */
-static void tcc_add_linker_symbols(TCCState *s1)
+static void add_linker_symbols(TCCState *s1)
 {
     char buf[1024];
     int i;
@@ -876,7 +875,7 @@ static void tcc_add_linker_symbols(TCCState *s1)
     set_global_sym(s1, "_etext", text_section, -1);
     set_global_sym(s1, "_edata", data_section, -1);
     set_global_sym(s1, "_end", bss_section, -1);
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
     /* XXX should be .sdata+0x800, not .data+0x800 */
     set_global_sym(s1, "__global_pointer$", data_section, 0x800);
 #endif
@@ -929,7 +928,7 @@ ST_FUNC void resolve_common_syms(TCCState *s1)
     }
 
     /* Now assign linker provided symbols their value.  */
-    tcc_add_linker_symbols(s1);
+    add_linker_symbols(s1);
 }
 
 ST_FUNC void fill_got_entry(TCCState *s1, ElfW_Rel *rel)
@@ -1245,7 +1244,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct tinyld_layout *d
 
 /* Create an ELF file on disk.
    This function handle ELF specific layout requirements */
-static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
+static int output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
 {
     int i, shnum;
     int file_type = s1->output_type;
@@ -1272,12 +1271,12 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
     ehdr.e_ident[5] = ELFDATA2LSB;
     ehdr.e_ident[6] = EV_CURRENT;
 
-#if defined TCC_TARGET_RISCV64
+#if defined TINY_TARGET_RISCV64
     /* XXX should be configurable */
     ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
 #endif
 
-    if (file_type == TCC_OUTPUT_OBJ) {
+    if (file_type == TINY_OUTPUT_OBJ) {
         ehdr.e_type = ET_REL;
     } else {
         ehdr.e_type = ET_EXEC;
@@ -1348,18 +1347,18 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
 }
 
 /* Write an ELF executable file. */
-static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
-                              ElfW(Phdr) *phdr)
+static int write_elf_file(TCCState *s1, const char *filename, int phnum,
+                          ElfW(Phdr) *phdr)
 {
     int fd, ret, mode;
     FILE *f;
 
-    mode = s1->output_type == TCC_OUTPUT_OBJ ? 0666 : 0777;
+    mode = s1->output_type == TINY_OUTPUT_OBJ ? 0666 : 0777;
     unlink(filename);
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, mode);
     if (fd < 0 || (f = fdopen(fd, "wb")) == NULL)
         return tcc_error_noabort("could not write '%s: %s'", filename, strerror(errno));
-    ret = tcc_output_elf(s1, f, phnum, phdr);
+    ret = output_elf(s1, f, phnum, phdr);
     fclose(f);
 
     return ret;
@@ -1402,7 +1401,7 @@ static void reorder_sections(TCCState *s1, int *sec_order)
     tcc_free(backmap);
 }
 
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
 static void create_riscv_attribute_section(TCCState *s1)
 {
     static const unsigned char riscv_attr[] = {
@@ -1436,7 +1435,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
 
     resolve_common_syms(s1);
     build_got_entries(s1, 0);
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
     create_riscv_attribute_section(s1);
 #endif
     set_sec_sizes(s1);
@@ -1455,7 +1454,7 @@ static int elf_output_file(TCCState *s1, const char *filename)
         fill_got(s1);
 
     reorder_sections(s1, sec_order);
-    ret = tcc_write_elf_file(s1, filename, layout.phnum, layout.phdr);
+    ret = write_elf_file(s1, filename, layout.phnum, layout.phdr);
 out:
     tcc_free(sec_order);
     tcc_free(layout.phdr);
@@ -1486,7 +1485,7 @@ static int elf_output_obj(TCCState *s1, const char *filename)
     int i, ret;
     unsigned long file_offset;
 
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
     create_riscv_attribute_section(s1);
 #endif
     alloc_sec_names(s1, 1);
@@ -1499,14 +1498,14 @@ static int elf_output_obj(TCCState *s1, const char *filename)
         if (s->sh_type != SHT_NOBITS)
             file_offset += s->sh_size;
     }
-    ret = tcc_write_elf_file(s1, filename, 0, NULL);
+    ret = write_elf_file(s1, filename, 0, NULL);
     return ret;
 }
 
 int tinyld_output_file(TCCState *s, const char *filename)
 {
     s->nb_errors = 0;
-    if (s->output_type == TCC_OUTPUT_OBJ)
+    if (s->output_type == TINY_OUTPUT_OBJ)
         return elf_output_obj(s, filename);
     return elf_output_file(s, filename);
 }
@@ -1546,7 +1545,7 @@ typedef struct SectionMergeInfo {
     uint8_t link_once;         /* true if link once section */
 } SectionMergeInfo;
 
-ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h)
+ST_FUNC int tinyld_object_type(int fd, ElfW(Ehdr) *h)
 {
     int size = full_read(fd, h, sizeof *h);
     if (size == sizeof *h && 0 == memcmp(h, ELFMAG, 4)) {
@@ -1562,8 +1561,8 @@ ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h)
 }
 
 /* load an object file and merge it with current files */
-ST_FUNC int tcc_load_object_file(TCCState *s1,
-                                 int fd, unsigned long file_offset)
+ST_FUNC int tinyld_load_object_file(TCCState *s1,
+                                    int fd, unsigned long file_offset)
 {
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) *shdr, *sh;
@@ -1578,7 +1577,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     Section *s;
 
     lseek(fd, file_offset, SEEK_SET);
-    if (tcc_object_type(fd, &ehdr) != AFF_BINTYPE_REL)
+    if (tinyld_object_type(fd, &ehdr) != AFF_BINTYPE_REL)
         goto invalid;
     /* test CPU specific stuff */
     if (ehdr.e_ident[5] != ELFDATA2LSB ||
@@ -1697,7 +1696,7 @@ invalid:
             ptr = s->data + offset;
             full_read(fd, ptr, size);
         }
-#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+#if defined TINY_TARGET_ARM64 || defined TINY_TARGET_RISCV64
         /* align code sections to instruction lenght */
         /* This is needed if we compile a c file after this */
         if (s->sh_flags & SHF_EXECINSTR)
@@ -1787,7 +1786,7 @@ invalid:
                 sym_index = old_to_new_syms[sym_index];
                 /* ignore link_once in rel section. */
                 if (!sym_index && !sm_table[sh->sh_info].link_once
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
                     && type != R_RISCV_ALIGN
                     && type != R_RISCV_RELAX
 #endif
@@ -1857,7 +1856,7 @@ static int read_ar_header(int fd, int offset, ArchiveHeader *hdr)
 }
 
 /* load only the objects which resolve undefined symbols */
-static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
+static int load_archive_alacarte(TCCState *s1, int fd, int size, int entrysize)
 {
     int i, bound, nsyms, sym_index, len, ret = -1;
     unsigned long long off;
@@ -1892,7 +1891,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
                 goto the_end;
             }
             off += len;
-            if (tcc_load_object_file(s1, fd, off) < 0)
+            if (tinyld_load_object_file(s1, fd, off) < 0)
                 goto the_end;
             ++bound;
         }
@@ -1904,7 +1903,7 @@ static int tcc_load_alacarte(TCCState *s1, int fd, int size, int entrysize)
 }
 
 /* load a '.a' file */
-ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
+ST_FUNC int tinyld_load_archive(TCCState *s1, int fd, int alacarte)
 {
     ArchiveHeader hdr;
     /* char magic[8]; */
@@ -1927,11 +1926,11 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
         if (alacarte) {
             /* coff symbol table : we handle it */
             if (!strcmp(hdr.ar_name, "/"))
-                return tcc_load_alacarte(s1, fd, size, 4);
+                return load_archive_alacarte(s1, fd, size, 4);
             if (!strcmp(hdr.ar_name, "/SYM64/"))
-                return tcc_load_alacarte(s1, fd, size, 8);
-        } else if (tcc_object_type(fd, &ehdr) == AFF_BINTYPE_REL) {
-            if (tcc_load_object_file(s1, fd, file_offset) < 0)
+                return load_archive_alacarte(s1, fd, size, 8);
+        } else if (tinyld_object_type(fd, &ehdr) == AFF_BINTYPE_REL) {
+            if (tinyld_load_object_file(s1, fd, file_offset) < 0)
                 return -1;
         }
         /* align to even */

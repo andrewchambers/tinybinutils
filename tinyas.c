@@ -10,7 +10,7 @@ static void usage(FILE *out)
 
 static char *default_output_name(const char *input)
 {
-    const char *base = tcc_basename(input);
+    const char *base = tiny_basename(input);
     const char *dot = strrchr(base, '.');
     size_t stem_len = dot ? (size_t)(dot - input) : strlen(input);
     char *out = tcc_malloc(stem_len + 3);
@@ -83,7 +83,7 @@ int main(int argc, char **argv)
         usage(stderr);
         goto out;
     }
-    if (!strcmp(tcc_fileextension(input), ".S")) {
+    if (!strcmp(tiny_fileextension(input), ".S")) {
         fputs("tinyas: .S preprocessing is not supported\n", stderr);
         goto out;
     }

@@ -1,5 +1,5 @@
 /*
- *  TCC - Tiny C Compiler
+ *  tinybinutils shared assembler/linker internals
  *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
@@ -70,15 +70,11 @@
 /* #define ASM_DEBUG */
 
 /* target selection */
-#if (defined(TCC_TARGET_X86_64) + defined(TCC_TARGET_ARM64) + defined(TCC_TARGET_RISCV64)) != 1
-# error tinyld requires exactly one target: TCC_TARGET_X86_64, TCC_TARGET_ARM64, or TCC_TARGET_RISCV64
+#if (defined(TINY_TARGET_X86_64) + defined(TINY_TARGET_ARM64) + defined(TINY_TARGET_RISCV64)) != 1
+# error tinyld requires exactly one target: TINY_TARGET_X86_64, TINY_TARGET_ARM64, or TINY_TARGET_RISCV64
 #endif
 
 #include "tinyelf.h"
-
-#ifndef LIBTCCAPI
-# define LIBTCCAPI
-#endif
 
 #ifndef PUB_FUNC
 # define PUB_FUNC
@@ -86,8 +82,8 @@
 
 typedef struct TCCState TCCState;
 
-#define TCC_OUTPUT_EXE         2
-#define TCC_OUTPUT_OBJ         3
+#define TINY_OUTPUT_EXE        2
+#define TINY_OUTPUT_OBJ        3
 
 /* -------------------------------------------- */
 
@@ -101,13 +97,13 @@ typedef struct TCCState TCCState;
 #define PTR_SIZE 8
 
 #define TARGET_DEFS_ONLY
-#if defined TCC_TARGET_X86_64
+#if defined TINY_TARGET_X86_64
 # define TINYLD_TARGET_NAME "x86_64"
 # include "x86_64-link.c"
-#elif defined TCC_TARGET_ARM64
+#elif defined TINY_TARGET_ARM64
 # define TINYLD_TARGET_NAME "aarch64"
 # include "arm64-link.c"
-#elif defined TCC_TARGET_RISCV64
+#elif defined TINY_TARGET_RISCV64
 # define TINYLD_TARGET_NAME "riscv64"
 # include "riscv64-link.c"
 #endif
@@ -125,7 +121,7 @@ typedef struct TCCState TCCState;
 #define addr_t ElfW(Addr)
 #define ElfSym ElfW(Sym)
 
-#if defined TCC_TARGET_X86_64
+#if defined TINY_TARGET_X86_64
 # define NB_ASM_REGS 16
 enum {
     TREG_RAX = 0,
@@ -149,7 +145,7 @@ enum {
     TREG_ST0 = 24,
     TREG_MEM = 0x20
 };
-#elif defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+#elif defined TINY_TARGET_ARM64 || defined TINY_TARGET_RISCV64
 # define NB_ASM_REGS 64
 #endif
 
@@ -323,7 +319,7 @@ struct TCCState {
     ElfW_Rel *qrel;
     #define qrel s1->qrel
 
-#ifdef TCC_TARGET_RISCV64
+#ifdef TINY_TARGET_RISCV64
     struct pcrel_hi { addr_t addr, val; } **pcrel_hi_entries;
     int nb_pcrel_hi_entries;
 #endif
@@ -358,16 +354,10 @@ struct TCCState {
 /* warning: the following compare tokens depend on i386 asm code */
 #define TOK_EQ  0x94
 #define TOK_NE  0x95
-#define TOK_ULE 0x96
-#define TOK_UGT 0x97
-#define TOK_Nset 0x98
-#define TOK_Nclear 0x99
 #define TOK_LT  0x9c
 #define TOK_GE  0x9d
 #define TOK_LE  0x9e
 #define TOK_GT  0x9f
-
-#define TOK_ISCOND(t) (t >= TOK_LAND && t <= TOK_GT)
 
 #define TOK_SHL     '<' /* shift left */
 #define TOK_SAR     '>' /* signed shift right */
@@ -396,19 +386,15 @@ enum tcc_token {
 #undef DEF
 };
 
-/* keywords: tok >= TOK_IDENT && tok < TOK_UIDENT */
-#define TOK_UIDENT TOK___FUNC__
-
-/* ------------ libtcc.c ------------ */
+/* ------------ tinyld_support.c ------------ */
 
 ST_DATA struct TCCState *tcc_state;
 
-/* public functions currently used by the tcc main function */
+/* string and path helpers */
 ST_FUNC char *pstrcpy(char *buf, size_t buf_size, const char *s);
 ST_FUNC char *pstrcat(char *buf, size_t buf_size, const char *s);
-ST_FUNC char *pstrncpy(char *out, size_t buf_size, const char *s, size_t num);
-PUB_FUNC char *tcc_basename(const char *name);
-PUB_FUNC char *tcc_fileextension (const char *name);
+PUB_FUNC char *tiny_basename(const char *name);
+PUB_FUNC char *tiny_fileextension(const char *name);
 
 /* all allocations - even MEM_DEBUG - use these */
 PUB_FUNC void tcc_free(void *ptr);
@@ -430,7 +416,6 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
 PUB_FUNC char *tcc_strdup_debug(const char *str, const char *file, int line);
 #endif
 
-ST_FUNC void libc_free(void *ptr);
 /* defined to be not used */
 #define free(p) use_tcc_free(p)
 #define malloc(s) use_tcc_malloc(s)
@@ -440,8 +425,6 @@ ST_FUNC void libc_free(void *ptr);
 PUB_FUNC int _tcc_error_noabort(const char *fmt, ...) PRINTF_LIKE(1,2);
 PUB_FUNC NORETURN void _tcc_error(const char *fmt, ...) PRINTF_LIKE(1,2);
 PUB_FUNC void _tcc_warning(const char *fmt, ...) PRINTF_LIKE(1,2);
-#define tcc_internal_error(msg) \
-    tcc_error("internal compiler error in %s:%d: %s", __FUNCTION__,__LINE__,msg)
 
 /* other utilities */
 ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data);
@@ -451,28 +434,24 @@ ST_FUNC void cstr_cat(CString *cstr, const char *str, int len);
 ST_FUNC void cstr_wccat(CString *cstr, int ch);
 ST_FUNC void cstr_new(CString *cstr);
 ST_FUNC void cstr_free(CString *cstr);
-ST_FUNC int cstr_printf(CString *cs, const char *fmt, ...) PRINTF_LIKE(2,3);
-ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap);
 ST_FUNC void cstr_reset(CString *cstr);
-ST_FUNC void tcc_open_bf(TCCState *s1, const char *filename, int initlen);
-ST_FUNC int tcc_open(TCCState *s1, const char *filename);
-ST_FUNC void tcc_close(void);
+ST_FUNC void tinyas_open_bf(TCCState *s1, const char *filename, int initlen);
+ST_FUNC int tinyas_open(TCCState *s1, const char *filename);
+ST_FUNC void tinyas_close(void);
 
-ST_FUNC int tcc_add_file_internal(TCCState *s1, const char *filename, int flags);
+ST_FUNC int tinyld_add_file_internal(TCCState *s1, const char *filename, int flags);
 /* flags: */
 #define AFF_PRINT_ERROR     0x10 /* print error if file not found */
 #define AFF_WHOLE_ARCHIVE   0x80 /* load all objects from archive */
-/* values from tcc_object_type(...) */
+/* values from tinyld_object_type(...) */
 #define AFF_BINTYPE_REL 1
 #define AFF_BINTYPE_DYN 2
 #define AFF_BINTYPE_AR  3
 
-/* return value of tcc_add_file_internal(): 0, -1, or FILE_NOT_FOUND */
+/* return value of tinyld_add_file_internal(): 0, -1, or FILE_NOT_FOUND */
 #define FILE_NOT_FOUND -2
 
-PUB_FUNC int tcc_add_library(TCCState *s, const char *libraryname);
-
-/* ------------ tccpp.c ------------ */
+/* ------------ lexer ------------ */
 
 ST_DATA struct BufferedFile *file;
 ST_DATA int tok;
@@ -513,10 +492,8 @@ ST_FUNC void tok_str_add(TokenString *s, int t);
 ST_FUNC void tok_str_add_tok(TokenString *s);
 ST_FUNC void next(void);
 ST_INLN void unget_tok(int last_tok);
-ST_FUNC void tcc_lexer_start(TCCState *s1);
-ST_FUNC void tcc_lexer_end(TCCState *s1);
-ST_FUNC void tccpp_new(TCCState *s);
-ST_FUNC void tccpp_delete(TCCState *s);
+ST_FUNC void tinyas_lexer_start(TCCState *s1);
+ST_FUNC void tinyas_lexer_end(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
 
@@ -538,7 +515,7 @@ static inline int toup(int c) {
     return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
 }
 
-/* ------------ tccgen.c ------------ */
+/* ------------ assembler symbol/code output support ------------ */
 
 #define SYM_POOL_NB (8192 / sizeof(Sym))
 
@@ -556,7 +533,7 @@ ST_INLN Sym *sym_find(int v);
 ST_FUNC Sym *global_identifier_push(int v, int t, int c);
 
 /* ------------ tccasm.c ------------ */
-ST_FUNC int tcc_assemble(TCCState *s1);
+ST_FUNC int tinyas_assemble(TCCState *s1);
 ST_FUNC Sym *get_asm_sym(int name, Sym *csym);
 ST_FUNC void asm_expr(TCCState *s1, ExprValue *pe);
 ST_FUNC int asm_int_expr(TCCState *s1);
@@ -570,7 +547,7 @@ ST_FUNC void g(int c);
 ST_FUNC void gen_le16(int c);
 ST_FUNC void gen_le32(int c);
 ST_FUNC void gen_fill_nops(int bytes);
-#ifdef TCC_TARGET_X86_64
+#ifdef TINY_TARGET_X86_64
 ST_FUNC void gen_addr32(int r, Sym *sym, int c);
 ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
 #endif
@@ -579,8 +556,8 @@ ST_FUNC void gen_addrpc32(int r, Sym *sym, int c);
 
 #define ARMAG  "!<arch>\n"    /* For COFF and a.out archives */
 
-ST_FUNC void tccelf_new(TCCState *s);
-ST_FUNC void tccelf_delete(TCCState *s);
+ST_FUNC void elf_state_new(TCCState *s);
+ST_FUNC void elf_state_delete(TCCState *s);
 ST_FUNC Section *new_section(TCCState *s1, const char *name, int sh_type, int sh_flags);
 ST_FUNC void section_realloc(Section *sec, unsigned long new_size);
 ST_FUNC size_t section_add(Section *sec, addr_t size, int align);
@@ -603,9 +580,9 @@ ST_FUNC void relocate_sections(TCCState *s1);
 
 ST_FUNC ssize_t full_read(int fd, void *buf, size_t count);
 ST_FUNC void *load_data(int fd, unsigned long file_offset, unsigned long size);
-ST_FUNC int tcc_object_type(int fd, ElfW(Ehdr) *h);
-ST_FUNC int tcc_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
-ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte);
+ST_FUNC int tinyld_object_type(int fd, ElfW(Ehdr) *h);
+ST_FUNC int tinyld_load_object_file(TCCState *s1, int fd, unsigned long file_offset);
+ST_FUNC int tinyld_load_archive(TCCState *s1, int fd, int alacarte);
 ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc);
 ST_FUNC addr_t get_sym_addr(TCCState *s, const char *name, int err);
 ST_FUNC int set_global_sym(TCCState *s1, const char *name, Section *sec, addr_t offs);
