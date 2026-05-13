@@ -1568,7 +1568,7 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) *shdr, *sh;
     unsigned long size, offset, offseti;
-    int i, j, nb_syms, sym_index, ret;
+    int i, j, nb_syms, sym_index, ret, seen_compressed_debug;
     char *strsec, *strtab;
     int *old_to_new_syms;
     char *sh_name, *name;
@@ -1600,10 +1600,14 @@ invalid:
     symtab = NULL;
     strtab = NULL;
     nb_syms = 0;
+    seen_compressed_debug = 0;
     ret = -1;
 
     for(i = 1; i < ehdr.e_shnum; i++) {
         sh = &shdr[i];
+        if ((sh->sh_flags & SHF_COMPRESSED) &&
+            is_debug_section_name(strsec + sh->sh_name))
+            seen_compressed_debug = 1;
         if (sh->sh_type == SHT_SYMTAB) {
             if (symtab) {
                 tcc_error_noabort("object must contain only one symtab");
@@ -1630,6 +1634,10 @@ invalid:
 	  sh = &shdr[sh->sh_info];
         /* ignore sections types we do not handle (plus relocs to those) */
         sh_name = strsec + sh->sh_name;
+        /* Drop all DWARF from objects with compressed debug sections;
+           otherwise relocations can reference sections we skipped. */
+        if (seen_compressed_debug && is_debug_section_name(sh_name))
+            continue;
         if (sh->sh_flags & SHF_COMPRESSED)
             continue;
         if (sh->sh_type != SHT_PROGBITS &&
