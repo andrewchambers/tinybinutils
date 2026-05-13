@@ -364,9 +364,7 @@ struct TCCState {
 
 /* tokens that carry values (in additional token string space / tokc) --> */
 #define TOK_CCHAR   0xc0 /* char constant in tokc */
-#define TOK_LCHAR   0xc1
 #define TOK_STR     0xc2 /* pointer to string in tokc */
-#define TOK_LSTR    0xc3
 #define TOK_PPNUM   0xc4 /* raw number token */
 #define TOK_PPSTR   0xc5 /* raw string token */
 #define TOK_LINENUM 0xc6 /* line number info */
