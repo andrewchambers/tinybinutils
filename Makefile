@@ -51,8 +51,8 @@ tinyas-aarch64: $(AARCH64_AS_OBJS)
 tinyas-riscv64: $(RISCV64_AS_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(RISCV64_AS_OBJS) $(LDLIBS)
 
-tinyar: tinyar.o
-	$(CC) $(LDFLAGS) -o $@ tinyar.o
+tinyar: build/tinyar.o
+	$(CC) $(LDFLAGS) -o $@ build/tinyar.o
 
 build/x86_64/%.o: %.c $(COMMON_DEPS)
 	@mkdir -p $(@D)
@@ -78,8 +78,10 @@ build/as-riscv64/%.o: %.c $(AS_DEPS)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) -DTINY_TARGET_RISCV64 $(AS_CFLAGS) -c -o $@ $<
 
-tinyar.o: tinyelf.h
+build/tinyar.o: tinyar.c tinyelf.h
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 clean:
 	rm -rf build
-	rm -f $(PROGS) tinyar.o
+	rm -f $(PROGS)
