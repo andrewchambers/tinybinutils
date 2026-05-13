@@ -14,4 +14,4 @@ tinyas-x86_64
 tinyas-aarch64
 tinyas-riscv64
 tinyar
-throwaway/**/build/
+tests/nix/.gcroots/
