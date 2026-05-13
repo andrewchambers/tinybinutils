@@ -70,24 +70,9 @@ static const unsigned char tok_two_chars[] =
     '<','=', TOK_LE,
     '>','=', TOK_GE,
     '!','=', TOK_NE,
-    '&','&', TOK_LAND,
-    '|','|', TOK_LOR,
-    '+','+', TOK_INC,
-    '-','-', TOK_DEC,
     '=','=', TOK_EQ,
     '<','<', TOK_SHL,
     '>','>', TOK_SAR,
-    '+','=', TOK_A_ADD,
-    '-','=', TOK_A_SUB,
-    '*','=', TOK_A_MUL,
-    '/','=', TOK_A_DIV,
-    '%','=', TOK_A_MOD,
-    '&','=', TOK_A_AND,
-    '^','=', TOK_A_XOR,
-    '|','=', TOK_A_OR,
-    '-','>', TOK_ARROW,
-    '.','.', TOK_TWODOTS,
-    '#','#', TOK_TWOSHARPS,
     0
 };
 
@@ -563,12 +548,6 @@ ST_FUNC const char *get_tok_str(int v, CValue *cv)
     case TOK_GT:
         v = '>';
         goto addv;
-    case TOK_DOTS:
-        return strcpy(p, "...");
-    case TOK_A_SHL:
-        return strcpy(p, "<<=");
-    case TOK_A_SAR:
-        return strcpy(p, ">>=");
     case TOK_EOF:
         return strcpy(p, "<eof>");
     case 0: /* anonymous nameless symbols */
@@ -1268,20 +1247,13 @@ maybe_newline:
         goto keep_tok_flags;
 
     case '#':
-        PEEKC(c, p);
-        if (c == '#') {
-            p++;
-            tok = TOK_TWOSHARPS;
-        } else {
 #ifndef TCC_TARGET_ARM64
-            if (parse_flags & PARSE_FLAG_ASM_FILE) {
-                p = parse_line_comment(p - 1);
-                goto redo_no_start;
-            }
-#endif
-            tok = '#';
+        if (parse_flags & PARSE_FLAG_ASM_FILE) {
+            p = parse_line_comment(p - 1);
+            goto redo_no_start;
         }
-        break;
+#endif
+        goto parse_simple;
     
     /* dollar is allowed to start identifiers when not parsing asm */
     case '$':
@@ -1396,15 +1368,6 @@ maybe_newline:
                    && (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))) {
             *--p = c = '.';
             goto parse_ident_fast;
-        } else if (c == '.') {
-            PEEKC(c, p);
-            if (c == '.') {
-                p++;
-                tok = TOK_DOTS;
-            } else {
-                *--p = '.'; /* may underflow into file->unget[] */
-                tok = '.';
-            }
         } else {
             tok = '.';
         }
@@ -1431,13 +1394,8 @@ maybe_newline:
             p++;
             tok = TOK_LE;
         } else if (c == '<') {
-            PEEKC(c, p);
-            if (c == '=') {
-                p++;
-                tok = TOK_A_SHL;
-            } else {
-                tok = TOK_SHL;
-            }
+            p++;
+            tok = TOK_SHL;
         } else {
             tok = TOK_LT;
         }
@@ -1448,78 +1406,15 @@ maybe_newline:
             p++;
             tok = TOK_GE;
         } else if (c == '>') {
-            PEEKC(c, p);
-            if (c == '=') {
-                p++;
-                tok = TOK_A_SAR;
-            } else {
-                tok = TOK_SAR;
-            }
+            p++;
+            tok = TOK_SAR;
         } else {
             tok = TOK_GT;
-        }
-        break;
-        
-    case '&':
-        PEEKC(c, p);
-        if (c == '&') {
-            p++;
-            tok = TOK_LAND;
-        } else if (c == '=') {
-            p++;
-            tok = TOK_A_AND;
-        } else {
-            tok = '&';
-        }
-        break;
-        
-    case '|':
-        PEEKC(c, p);
-        if (c == '|') {
-            p++;
-            tok = TOK_LOR;
-        } else if (c == '=') {
-            p++;
-            tok = TOK_A_OR;
-        } else {
-            tok = '|';
-        }
-        break;
-
-    case '+':
-        PEEKC(c, p);
-        if (c == '+') {
-            p++;
-            tok = TOK_INC;
-        } else if (c == '=') {
-            p++;
-            tok = TOK_A_ADD;
-        } else {
-            tok = '+';
-        }
-        break;
-        
-    case '-':
-        PEEKC(c, p);
-        if (c == '-') {
-            p++;
-            tok = TOK_DEC;
-        } else if (c == '=') {
-            p++;
-            tok = TOK_A_SUB;
-        } else if (c == '>') {
-            p++;
-            tok = TOK_ARROW;
-        } else {
-            tok = '-';
         }
         break;
 
     PARSE2('!', '!', '=', TOK_NE)
     PARSE2('=', '=', '=', TOK_EQ)
-    PARSE2('*', '*', '=', TOK_A_MUL)
-    PARSE2('%', '%', '=', TOK_A_MOD)
-    PARSE2('^', '^', '=', TOK_A_XOR)
         
         /* comments or operator */
     case '/':
@@ -1533,9 +1428,6 @@ maybe_newline:
             p = parse_line_comment(p);
             tok = ' ';
             goto maybe_space;
-        } else if (c == '=') {
-            p++;
-            tok = TOK_A_DIV;
         } else {
             tok = '/';
         }
@@ -1554,6 +1446,10 @@ maybe_newline:
     case ':':
     case '?':
     case '~':
+    case '&':
+    case '|':
+    case '+':
+    case '-':
     parse_simple:
         tok = c;
         p++;
