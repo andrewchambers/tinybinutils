@@ -54,7 +54,7 @@
 # error tinyld requires exactly one target: TINY_TARGET_X86_64, TINY_TARGET_ARM64, or TINY_TARGET_RISCV64
 #endif
 
-#include "tinyelf.h"
+#include <elf.h>
 
 #ifndef PUB_FUNC
 # define PUB_FUNC

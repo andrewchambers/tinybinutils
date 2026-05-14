@@ -9,6 +9,9 @@
 #define R_COPY     R_AARCH64_COPY
 #define R_RELATIVE R_AARCH64_RELATIVE
 
+#ifndef R_AARCH64_NUM
+# define R_AARCH64_NUM 1033
+#endif
 #define R_NUM      R_AARCH64_NUM
 
 #define ELF_START_ADDR 0x00400000

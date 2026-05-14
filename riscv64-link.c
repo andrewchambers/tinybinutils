@@ -9,6 +9,15 @@
 #define R_COPY     R_RISCV_COPY
 #define R_RELATIVE R_RISCV_RELATIVE
 
+#ifndef R_RISCV_NUM
+# define R_RISCV_NUM 62
+#endif
+#ifndef SHT_RISCV_ATTRIBUTES
+# define SHT_RISCV_ATTRIBUTES 0x70000003
+#endif
+#ifndef EF_RISCV_FLOAT_ABI_DOUBLE
+# define EF_RISCV_FLOAT_ABI_DOUBLE 0x0004
+#endif
 #define R_NUM      R_RISCV_NUM
 
 #define ELF_START_ADDR 0x00010000
