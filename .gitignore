@@ -9,9 +9,5 @@ tinyld
 tinyld-x86_64
 tinyld-aarch64
 tinyld-riscv64
-tinyas
-tinyas-x86_64
-tinyas-aarch64
-tinyas-riscv64
 tinyar
 tests/nix/result

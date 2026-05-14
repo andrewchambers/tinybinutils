@@ -1,5 +1,5 @@
 /*
- *  ELF file handling for tinyld/tinyas
+ *  ELF file handling for tinyld
  *
  *  Copyright (c) 2001-2004 Fabrice Bellard
  *
@@ -216,17 +216,6 @@ static Section *have_section(TCCState *s1, const char *name)
     return NULL;
 }
 
-/* return a reference to a section, and create it if it does not
-   exists */
-ST_FUNC Section *find_section(TCCState *s1, const char *name)
-{
-    Section *sec = have_section(s1, name);
-    if (sec)
-        return sec;
-    /* sections are created as PROGBITS */
-    return new_section(s1, name, SHT_PROGBITS, SHF_ALLOC);
-}
-
 /* ------------------------------------------------------------------------- */
 
 ST_FUNC int put_elf_str(Section *s, const char *sym)
@@ -437,10 +426,6 @@ ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,
                 goto do_patch;
             } else if (shndx == SHN_COMMON || shndx == bss_section->sh_num) {
                 /* data symbol keeps precedence over common/bss */
-	    } else if (esym->st_other & ST_ASM_SET) {
-		/* If the existing symbol came from an asm .set
-		   we can override.  */
-		goto do_patch;
             } else {
 #if 0
                 printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
@@ -536,7 +521,7 @@ static void update_relocs(TCCState *s1, Section *s, int *old_to_new_syms, int fi
                 sym_index = ELFW(R_SYM)(rel->r_info);
                 type = ELFW(R_TYPE)(rel->r_info);
                 if ((sym_index -= first_sym) < 0)
-                    continue; /* zero sym_index in reloc (can happen with asm) */
+                    continue; /* zero sym_index in reloc */
                 sym_index = old_to_new_syms[sym_index];
                 rel->r_info = ELFW(R_INFO)(sym_index, type);
             }
@@ -1510,12 +1495,6 @@ int tinyld_output_file(TCCState *s, const char *filename)
     return elf_output_file(s, filename);
 }
 
-int tinyas_output_file(TCCState *s, const char *filename)
-{
-    s->nb_errors = 0;
-    return elf_output_obj(s, filename);
-}
-
 ST_FUNC ssize_t full_read(int fd, void *buf, size_t count) {
     char *cbuf = buf;
     size_t rnum = 0;
@@ -1698,7 +1677,7 @@ invalid:
         }
 #if defined TINY_TARGET_ARM64 || defined TINY_TARGET_RISCV64
         /* align code sections to instruction lenght */
-        /* This is needed if we compile a c file after this */
+        /* Keep instruction sections aligned after merging input objects. */
         if (s->sh_flags & SHF_EXECINSTR)
             section_add(s, 0, 4);
 #endif

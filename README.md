@@ -1,13 +1,11 @@
 # tinybinutils
 
-tinybinutils is a small ELF-only assembler, linker, and archive toolset
-forked from TinyCC. It is intended for bootstrap environments and small
-compilers that need a compact subset of binutils.
+tinybinutils is a small ELF-only linker and archive toolset forked from
+TinyCC. It is intended for bootstrap environments and small compilers that
+need compact static-linking tools.
 
 ## Tools
 
-- `tinyas`: x86_64 assembler alias
-- `tinyas-x86_64`, `tinyas-aarch64`, `tinyas-riscv64`
 - `tinyld`: x86_64 linker alias
 - `tinyld-x86_64`, `tinyld-aarch64`, `tinyld-riscv64`
 - `tinyar`: static archive creator, lister, and extractor
@@ -21,7 +19,7 @@ make
 ## Examples
 
 ```sh
-./tinyas -o start.o start.s
+cc -c -o start.o start.s
 ./tinyld -o prog start.o libc.a
 ./tinyar crs libfoo.a foo.o bar.o
 ```
@@ -36,7 +34,6 @@ make
 
 ## Unsupported By Design
 
-- assembly preprocessing
 - dynamic libraries
 - shared object output
 - PIE output

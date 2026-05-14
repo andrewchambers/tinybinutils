@@ -57,7 +57,7 @@ PUB_FUNC void tcc_exit_state(TCCState *s1)
     tcc_state = NULL;
 }
 
-static void tinyld_vmessage(int is_error, const char *fmt, va_list ap)
+static void tinyld_vmessage(const char *fmt, va_list ap)
 {
     char msg[2048];
     TCCState *s1 = tcc_state;
@@ -68,7 +68,7 @@ static void tinyld_vmessage(int is_error, const char *fmt, va_list ap)
         fprintf(stderr, "%s: %s: %s\n", tool, s1->current_filename, msg);
     else
         fprintf(stderr, "%s: %s\n", tool, msg);
-    if (is_error && s1)
+    if (s1)
         s1->nb_errors++;
 }
 
@@ -77,71 +77,9 @@ PUB_FUNC int _tcc_error_noabort(const char *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    tinyld_vmessage(1, fmt, ap);
+    tinyld_vmessage(fmt, ap);
     va_end(ap);
     return -1;
-}
-
-#undef _tcc_error
-PUB_FUNC void _tcc_error(const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start(ap, fmt);
-    tinyld_vmessage(1, fmt, ap);
-    va_end(ap);
-    if (tcc_state && tcc_state->error_set_jmp_enabled)
-        longjmp(tcc_state->error_jmp_buf, 1);
-    exit(1);
-}
-#define _tcc_error use_tcc_error_noabort
-
-PUB_FUNC void _tcc_warning(const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start(ap, fmt);
-    tinyld_vmessage(0, fmt, ap);
-    va_end(ap);
-}
-
-ST_FUNC char *pstrcpy(char *buf, size_t buf_size, const char *s)
-{
-    char *q = buf;
-    char *end = buf + buf_size;
-
-    if (buf_size) {
-        while (q + 1 < end && *s)
-            *q++ = *s++;
-        *q = '\0';
-    }
-    return buf;
-}
-
-ST_FUNC char *pstrcat(char *buf, size_t buf_size, const char *s)
-{
-    size_t len = strlen(buf);
-
-    if (len < buf_size)
-        pstrcpy(buf + len, buf_size - len, s);
-    return buf;
-}
-
-PUB_FUNC char *tiny_basename(const char *name)
-{
-    const char *p = name + strlen(name);
-
-    while (p > name && !IS_DIRSEP(p[-1]))
-        p--;
-    return (char *)p;
-}
-
-PUB_FUNC char *tiny_fileextension(const char *name)
-{
-    char *base = tiny_basename(name);
-    char *ext = strrchr(base, '.');
-
-    return ext ? ext : base + strlen(base);
 }
 
 ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data)

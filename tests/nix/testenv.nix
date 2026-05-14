@@ -104,9 +104,7 @@ let
     installPhase = ''
       runHook preInstall
       mkdir -p $out/bin
-      cp tinyld tinyld-x86_64 tinyld-aarch64 tinyld-riscv64 \
-        tinyas tinyas-x86_64 tinyas-aarch64 tinyas-riscv64 tinyar \
-        $out/bin/
+      cp tinyld tinyld-x86_64 tinyld-aarch64 tinyld-riscv64 tinyar $out/bin/
       runHook postInstall
     '';
   };
@@ -134,7 +132,7 @@ let
           --target=${target} \
           --with-cpp="${stdenv.cc}/bin/cc -E -nostdinc -isystem ${musl}/include" \
           --with-qbe="${qbe}/bin/qbe" \
-          --with-as="${tinybinutils}/bin/tinyas-x86_64" \
+          --with-as="${stdenv.cc}/bin/cc -x assembler -c" \
           --with-ld="${tinybinutils}/bin/tinyld-x86_64 -static -L ${musl}/lib" \
           --with-ldso= \
           CC="${cc}"
